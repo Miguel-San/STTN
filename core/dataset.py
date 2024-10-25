@@ -68,7 +68,7 @@ class Dataset(torch.utils.data.Dataset):
             # img = ZipReader.imread('{}/{}/JPEGImages/{}.zip'.format(
             #     self.args['data_root'], self.args['name'], video_name), all_frames[idx]).convert('RGB')
             img = Image.fromarray(cv2.imread('{}/{}/JPEGImages/{}'.format(
-                self.args['data_root'], self.args['name'], video_name) + '/' + all_frames[idx]))
+                self.args['data_root'], self.args['name'], video_name) + '/' + all_frames[idx])).convert("L")
             img = img.resize(self.size)
             frames.append(img)
             # masks.append(all_masks[idx])
@@ -107,7 +107,7 @@ class TestDataset(Dataset):
         masks = []
         for i in range(len(all_frames)):
             img = Image.fromarray(cv2.imread('{}/{}/JPEGImages/{}'.format(
-                self.args['data_root'], self.args['name'], video_name) + '/' + all_frames[i]))
+                self.args['data_root'], self.args['name'], video_name) + '/' + all_frames[i])).convert("L")
             img = img.resize(self.size)
             frames.append(img)
 

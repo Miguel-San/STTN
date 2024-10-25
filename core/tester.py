@@ -85,5 +85,6 @@ class Tester():
                 frame = (frame - frame.min()) / (frame.max() - frame.min()) * 255.0
                 frame = frame.astype(np.uint8)
 
-                img = Image.fromarray(np.moveaxis(frame, 0, -1)[...,::-1], mode="RGB")
+                # img = Image.fromarray(np.moveaxis(frame, 0, -1)[...,::-1], mode="RGB")
+                img = Image.fromarray(np.squeeze(frame), mode="L")
                 img.save(img_path)
