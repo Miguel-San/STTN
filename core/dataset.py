@@ -25,6 +25,7 @@ class Dataset(torch.utils.data.Dataset):
         self.split = split
         self.sample_length = args['sample_length']
         self.size = self.w, self.h = (args['w'], args['h'])
+        self.img_ext = args['img_ext']
 
         with open(os.path.join(args['data_root'], args['name'], split+'.json'), 'r') as f:
             self.video_dict = json.load(f)
@@ -49,21 +50,32 @@ class Dataset(torch.utils.data.Dataset):
 
     def load_item(self, index):
         video_name = self.video_names[index]
-        all_frames = [f"{str(i).zfill(5)}.jpg" for i in range(self.video_dict[video_name])]
-        all_masks = create_random_shape_with_random_motion(
-            len(all_frames), imageHeight=self.h, imageWidth=self.w)
+        all_frames = [f"{str(i).zfill(5)}."+self.img_ext for i in range(self.video_dict[video_name])]
+        # all_masks = create_random_shape_with_random_motion(
+        #     len(all_frames), imageHeight=self.h, imageWidth=self.w)
+        all_masks = []
+        for fname in os.listdir('{}/{}/masks'.format(self.args['data_root'], self.args['name'])):
+            mask = Image.fromarray(cv2.imread('{}/{}/masks'.format(
+                self.args['data_root'], self.args['name']) + '/' + fname)).convert("L")
+            mask = mask.resize(self.size)
+            all_masks.append(mask)
+
         ref_index = get_ref_index(len(all_frames), self.sample_length)
         # read video frames
         frames = []
         masks = []
         for idx in ref_index:
-            img = ZipReader.imread('{}/{}/JPEGImages/{}.zip'.format(
-                self.args['data_root'], self.args['name'], video_name), all_frames[idx]).convert('RGB')
+            # img = ZipReader.imread('{}/{}/JPEGImages/{}.zip'.format(
+            #     self.args['data_root'], self.args['name'], video_name), all_frames[idx]).convert('RGB')
+            img = Image.fromarray(cv2.imread('{}/{}/JPEGImages/{}'.format(
+                self.args['data_root'], self.args['name'], video_name) + '/' + all_frames[idx]))
             img = img.resize(self.size)
             frames.append(img)
-            masks.append(all_masks[idx])
+            # masks.append(all_masks[idx])
+            masks.append(all_masks[np.random.randint(len(all_masks))])
         if self.split == 'train':
-            frames = GroupRandomHorizontalFlip()(frames)
+            pass
+            # frames = GroupRandomHorizontalFlip()(frames)
         # To tensors
         frame_tensors = self._to_tensors(frames)*2.0 - 1.0
         mask_tensors = self._to_tensors(masks)
@@ -78,3 +90,51 @@ def get_ref_index(length, sample_length):
         pivot = random.randint(0, length-sample_length)
         ref_index = [pivot+i for i in range(sample_length)]
     return ref_index
+
+
+class TestDataset(Dataset):
+    def load_item(self, index):
+        video_name = self.video_names[index]
+        all_frames = [f"{str(i).zfill(5)}."+self.img_ext for i in range(self.video_dict[video_name])]
+        all_masks = []
+        for fname in os.listdir('{}/{}/masks'.format(self.args['data_root'], self.args['name'])):
+            mask = Image.fromarray(cv2.imread('{}/{}/masks'.format(
+                self.args['data_root'], self.args['name']) + '/' + fname)).convert("L")
+            mask = mask.resize(self.size)
+            all_masks.append(mask)
+
+        frames = []
+        masks = []
+        for i in range(len(all_frames)):
+            img = Image.fromarray(cv2.imread('{}/{}/JPEGImages/{}'.format(
+                self.args['data_root'], self.args['name'], video_name) + '/' + all_frames[i]))
+            img = img.resize(self.size)
+            frames.append(img)
+
+            masks.append(all_masks[np.random.randint(len(all_masks))])
+
+        frame_tensors = self._to_tensors(frames)*2.0 - 1.0
+        mask_tensors = self._to_tensors(masks)
+        return frame_tensors, mask_tensors
+    
+    @classmethod
+    def get_win_idx_from_frame(cls, idx, sample_length, nframes):
+        first_win_idx = idx // (sample_length-1)
+        last_win_idx = idx
+
+        win_indices = []
+        frame_indices = []
+        k = sample_length - (last_win_idx - first_win_idx) - 1
+        for w_idx in range(first_win_idx, last_win_idx+1):
+            if w_idx >= nframes-sample_length:
+                continue
+
+            f_idx = sample_length - k - 1   
+            k+=1
+            if f_idx < 0 or f_idx >= sample_length:
+                continue
+
+            win_indices.append(w_idx)
+            frame_indices.append(f_idx)    
+
+        return win_indices, frame_indices

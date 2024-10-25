@@ -1,5 +1,6 @@
 */__pycache__/
 release_model
+output
 *.log
 debug.py
 *.avi
@@ -10,3 +11,4 @@ examples/*_result.mp4
 *.jpg
 *.png
 *.zip
+*.out

@@ -26,7 +26,9 @@ args = parser.parse_args()
 def main_worker(rank, config):
     if 'local_rank' not in config:
         config['local_rank'] = config['global_rank'] = rank
+        print("rank = ", rank)
     if config['distributed']:
+        print("DISTRIBUTED!!!!!")
         torch.cuda.set_device(int(config['local_rank']))
         torch.distributed.init_process_group(backend='nccl',
                                              init_method=config['init_method'],
@@ -39,10 +41,14 @@ def main_worker(rank, config):
 
     config['save_dir'] = os.path.join(config['save_dir'], '{}_{}'.format(config['model'],
                                                                          os.path.basename(args.config).split('.')[0]))
-    if torch.cuda.is_available(): 
-        config['device'] = torch.device("cuda:{}".format(config['local_rank']))
-    else: 
-        config['device'] = 'cpu'
+    # if torch.cuda.is_available(): 
+    #     config['device'] = torch.device("cuda:{}".format(config['local_rank']))
+    # else: 
+    #     config['device'] = 'cpu'
+
+    config["device"] = torch.device("cuda:{}".format(config["device_int"]))
+
+    print("Device: ", config["device"])
 
     if (not config['distributed']) or config['global_rank'] == 0:
         os.makedirs(config['save_dir'], exist_ok=True)
@@ -64,16 +70,23 @@ if __name__ == "__main__":
     config['config'] = args.config
 
     # setting distributed configurations
-    config['world_size'] = get_world_size()
-    config['init_method'] = f"tcp://{get_master_ip()}:{args.port}"
-    config['distributed'] = True if config['world_size'] > 1 else False
+    # config['world_size'] = get_world_size()
+    # config['init_method'] = f"tcp://{get_master_ip()}:{args.port}"
+    # config['distributed'] = True if config['world_size'] > 1 else False
+    config["world_size"] = 1
+    config["distributed"] = False
+
+    import json
+    print(json.dumps(config, indent=4))
 
     # setup distributed parallel training environments
     if get_master_ip() == "127.0.0.1":
+    # if False:
         # manually launch distributed processes 
         mp.spawn(main_worker, nprocs=config['world_size'], args=(config,))
     else:
         # multiple processes have been launched by openmpi 
-        config['local_rank'] = get_local_rank()
-        config['global_rank'] = get_global_rank()
-        main_worker(-1, config)
+        # config['local_rank'] = get_local_rank()
+        # config['global_rank'] = get_global_rank()
+        # main_worker(-1, config)
+        main_worker(1, config)

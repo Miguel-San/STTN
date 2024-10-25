@@ -19,11 +19,11 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 from torch.nn.parallel import DistributedDataParallel as DDP
-from tensorboardX import SummaryWriter
+from torch.utils.tensorboard import SummaryWriter
 from torchvision.utils import make_grid, save_image
 import torch.distributed as dist
 
-from core.dataset import Dataset
+from core.dataset import Dataset, TestDataset
 from core.loss import AdversarialLoss
 
 
@@ -52,6 +52,23 @@ class Trainer():
             shuffle=(self.train_sampler is None), 
             num_workers=self.train_args['num_workers'],
             sampler=self.train_sampler)
+        
+        # Test dataset
+        self.test_dataset = TestDataset(config['data_loader'], split='test', debug=debug)
+        self.control_imgs_loader = DataLoader(
+            self.test_dataset,
+            batch_size=1,
+            shuffle=False,
+            num_workers=self.train_args['num_workers'],
+            sampler=None
+        )
+        self.test_loader = DataLoader(
+            self.test_dataset,
+            batch_size=self.train_args['batch_size'] // config['world_size'],
+            shuffle=False,
+            num_workers=self.train_args['num_workers'],
+            sampler=None
+        )
 
         # set loss functions 
         self.adversarial_loss = AdversarialLoss(type=self.config['losses']['GAN_LOSS'])
@@ -94,10 +111,13 @@ class Trainer():
         self.gen_writer = None
         self.summary = {}
         if self.config['global_rank'] == 0 or (not config['distributed']):
-            self.dis_writer = SummaryWriter(
-                os.path.join(config['save_dir'], 'dis'))
-            self.gen_writer = SummaryWriter(
-                os.path.join(config['save_dir'], 'gen'))
+            # self.dis_writer = SummaryWriter(
+            #     os.path.join(config['save_dir'], 'dis'))
+            # self.gen_writer = SummaryWriter(
+            #     os.path.join(config['save_dir'], 'gen'))
+
+            sum_writer_path = os.path.join(config['save_dir']+"/tb_log")
+            self.tb_writer = SummaryWriter(sum_writer_path)
 
     # get current learning rate
     def get_lr(self):
@@ -223,10 +243,10 @@ class Trainer():
             dis_real_loss = self.adversarial_loss(real_vid_feat, True, True)
             dis_fake_loss = self.adversarial_loss(fake_vid_feat, False, True)
             dis_loss += (dis_real_loss + dis_fake_loss) / 2
-            self.add_summary(
-                self.dis_writer, 'loss/dis_vid_fake', dis_fake_loss.item())
-            self.add_summary(
-                self.dis_writer, 'loss/dis_vid_real', dis_real_loss.item())
+            # self.add_summary(
+            #     self.dis_writer, 'loss/dis_vid_fake', dis_fake_loss.item())
+            # self.add_summary(
+            #     self.dis_writer, 'loss/dis_vid_real', dis_real_loss.item())
             self.optimD.zero_grad()
             dis_loss.backward()
             self.optimD.step()
@@ -236,21 +256,21 @@ class Trainer():
             gan_loss = self.adversarial_loss(gen_vid_feat, True, False)
             gan_loss = gan_loss * self.config['losses']['adversarial_weight']
             gen_loss += gan_loss
-            self.add_summary(
-                self.gen_writer, 'loss/gan_loss', gan_loss.item())
+            # self.add_summary(
+            #     self.gen_writer, 'loss/gan_loss', gan_loss.item())
 
             # generator l1 loss
             hole_loss = self.l1_loss(pred_img*masks, frames*masks)
             hole_loss = hole_loss / torch.mean(masks) * self.config['losses']['hole_weight']
             gen_loss += hole_loss 
-            self.add_summary(
-                self.gen_writer, 'loss/hole_loss', hole_loss.item())
+            # self.add_summary(
+            #     self.gen_writer, 'loss/hole_loss', hole_loss.item())
 
             valid_loss = self.l1_loss(pred_img*(1-masks), frames*(1-masks))
             valid_loss = valid_loss / torch.mean(1-masks) * self.config['losses']['valid_weight']
             gen_loss += valid_loss 
-            self.add_summary(
-                self.gen_writer, 'loss/valid_loss', valid_loss.item())
+            # self.add_summary(
+            #     self.gen_writer, 'loss/valid_loss', valid_loss.item())
             
             self.optimG.zero_grad()
             gen_loss.backward()
@@ -264,9 +284,110 @@ class Trainer():
                     f"hole: {hole_loss.item():.3f}; valid: {valid_loss.item():.3f}")
                 )
 
+            # Tensorboard logs
+            if self.iteration % self.train_args["log_freq"] == 0:
+                loss_dict = {
+                    'dis_loss': dis_loss.item(),
+                    'gan_loss': gan_loss.item(),
+                    'hole_loss': hole_loss.item(),
+                    'valid_loss': valid_loss.item(),
+                    "gen_loss": gen_loss.item()
+                }
+
+                self.netD.eval()
+                self.netG.eval()
+
+                with torch.no_grad():
+                    for frames, masks in self.test_loader:
+                        gen_loss = 0
+                        dis_loss = 0
+
+                        frames, masks = frames.to(device), masks.to(device)
+                        b, t, c, h, w = frames.size()
+                        masked_frame = (frames * (1 - masks).float())
+                        pred_img = self.netG(masked_frame, masks)
+                        frames = frames.view(b*t, c, h, w)
+                        masks = masks.view(b*t, 1, h, w)
+                        comp_img = frames*(1.-masks) + masks*pred_img
+
+                        real_vid_feat = self.netD(frames)
+                        fake_vid_feat = self.netD(comp_img.detach())
+                        dis_real_loss = self.adversarial_loss(real_vid_feat, True, True)
+                        dis_fake_loss = self.adversarial_loss(fake_vid_feat, False, True)
+                        dis_loss += (dis_real_loss + dis_fake_loss) / 2
+
+                        gen_vid_feat = self.netD(comp_img)
+                        gan_loss = self.adversarial_loss(gen_vid_feat, True, False)
+                        gan_loss = gan_loss * self.config['losses']['adversarial_weight']
+                        gen_loss += gan_loss
+
+                        hole_loss = self.l1_loss(pred_img*masks, frames*masks)
+                        hole_loss = hole_loss / torch.mean(masks) * self.config['losses']['hole_weight']
+                        gen_loss += hole_loss
+
+                        valid_loss = self.l1_loss(pred_img*(1-masks), frames*(1-masks))
+                        valid_loss = valid_loss / torch.mean(1-masks) * self.config['losses']['valid_weight']
+                        gen_loss += valid_loss 
+                        break
+
+                loss_dict_val = {
+                    'dis_loss': dis_loss.item(),
+                    'gan_loss': gan_loss.item(),
+                    'hole_loss': hole_loss.item(),
+                    'valid_loss': valid_loss.item(),
+                    "gen_loss": gen_loss.item()
+                }
+
+                for k in loss_dict.keys():
+                    v_tr = loss_dict[k]
+                    v_val = loss_dict_val[k]
+
+                    self.tb_writer.add_scalars("Loss/"+k, {
+                        "Training" : v_tr,
+                        "Validation" : v_val
+                    }, self.iteration)
+
+            # Control images            
+            if self.iteration % self.train_args['valid_freq'] == 0:
+                win_len = self.config['data_loader']['sample_length']
+                self.netG.eval()
+                with torch.no_grad():
+                    for i, (frames, masks) in enumerate(self.control_imgs_loader):
+                        video_name = self.test_dataset.video_names[i]
+                        video_len = frames.shape[1]
+                        orig_frames = []
+                        pred_frames = []
+                        comp_frames = []
+                        for f in range(video_len-15, video_len-10):
+                            frames_win = frames[:, f:f+win_len]
+                            masks_win = masks[:, f:f+win_len]
+                            frames_win, masks_win = frames_win.to(device), masks_win.to(device)
+                            b, t, c, h, w = frames_win.size()
+                            masked_frame = (frames_win * (1 - masks_win).float())
+                            pred_img = self.netG(masked_frame, masks_win)
+                            frames_win = frames_win.view(b*t, c, h, w)
+                            masks_win = masks_win.view(b*t, 1, h, w)
+                            comp_img = frames_win*(1.-masks_win) + masks_win*pred_img
+                            comp_img = comp_img.view(b, t, c, h, w)
+                            comp_img = (comp_img + 1) / 2
+                            
+                            orig_frames.append(((frames_win.view(b,t,c,h,w)[0,win_len//2+1,...]+1)/2).cpu().numpy())
+                            pred_frames.append(((pred_img.view(b,t,c,h,w)[0,win_len//2+1,...]+1)/2).cpu().numpy())
+                            comp_frames.append(comp_img.view(b,t,c,h,w)[0,win_len//2+1,...].cpu().numpy())
+
+                        grid = make_grid(torch.cat([
+                            torch.tensor(orig_frames), 
+                            torch.tensor(pred_frames), 
+                            torch.tensor(comp_frames)], dim=0), nrow=5)
+                        save_dir = os.path.join(self.config['save_dir'], 'control_images')
+                        os.makedirs(save_dir, exist_ok=True)
+                        save_image(grid, os.path.join(save_dir, f'{video_name}_{self.iteration}.png'))
+                self.netG.train()
+                        
+
             # saving models
             if self.iteration % self.train_args['save_freq'] == 0:
-                self.save(int(self.iteration//self.train_args['save_freq']))
+                self.save(int(self.iteration))
             if self.iteration > self.train_args['iterations']:
                 break
 
