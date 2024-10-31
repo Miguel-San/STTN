@@ -1,6 +1,6 @@
 #!/bin/bash
 ##----------------------- Start job description -----------------------
-#SBATCH --job-name=2_STTN_inpainting
+#SBATCH --job-name=3_STTN_inpainting
 #SBATCH --nodes=1
 #SBATCH --nodelist=n008
 #SBATCH --ntasks=1                 # number of MPI processes
@@ -12,7 +12,7 @@
 #SBATCH --time=96:00:00
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=miguel.sanchez.dominguez@upm.es
-#SBATCH --output=slurm_STTN2.out
+#SBATCH --output=slurm_STTN.out
 ##------------------------ End job description ------------------------
 
 date
@@ -21,5 +21,5 @@ eval "$(conda shell.bash hook)"
 conda activate AIRML
 python train.py --config configs/twin_jet_develop_scaled_Ma126.json --model sttn
 ##python train.py --config configs/davis.json --model sttn
-##python test_custom.py --config configs/twin_jet.json --model sttn --ckpt 3000 --ds_name mics
+##python test_custom.py --config configs/twin_jet_develop_scaled_Ma126.json --model sttn --ckpt 3000 --ds_name full_ds_1e4
 date
