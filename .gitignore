@@ -1,5 +1,6 @@
 */__pycache__/
 release_model
+release_model_dev
 output
 *.log
 debug.py
