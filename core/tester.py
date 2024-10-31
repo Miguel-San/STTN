@@ -40,6 +40,7 @@ class Tester():
         comp_frames = {v_name:[] for v_name in self.dataset.video_names}
         video_len = {}
 
+        print("Predicting...")
         self.netG.eval()
         for i, (frames, masks) in enumerate(self.test_loader):
             video_name = self.dataset.video_names[i]
@@ -63,23 +64,25 @@ class Tester():
                     comp_frames[video_name].append(comp_img.cpu().numpy())
                     # comp_frames[video_name].append(pred_img.view(b,t,c,h,w).cpu().numpy())
 
+        print("Promediating each frame for every window...")
         # Promediate each frame with corresponding generated frames in each window
         comp_mean_frames = {}
         for video_name, frames in comp_frames.items():
             print(len(comp_frames[video_name]), comp_frames[video_name][0].shape)
 
             comp_mean_frames[video_name] = np.empty((video_len[video_name], *comp_frames[video_name][0].shape[-3:]))
-            for i in range(video_len[video_name]):
+            for i in tqdm(range(video_len[video_name]), desc=video_name):
                 win_indices, frame_indices = TestDataset.get_win_idx_from_frame(i, win_len, video_len[video_name])
                 frame_stack = np.empty((len(win_indices), *comp_frames[video_name][0].shape[-3:]))
                 for j in range(len(win_indices)):
                     frame_stack[j] = comp_frames[video_name][win_indices[j]][0,frame_indices[j],...]
                 comp_mean_frames[video_name][i] = np.mean(frame_stack, axis=0)
 
+        print("Saving...")
         # Save the completed frames as separate images
         for video_name, frames in comp_mean_frames.items():
             os.makedirs(self.config["results_dir"]+"/"+self.config["data_loader"]["name"]+"/"+video_name, exist_ok=True)
-            for i, frame in enumerate(frames):
+            for i, frame in tqdm(enumerate(frames), desc=video_name, total=len(frames)):
                 img_path = self.config["results_dir"]+"/"+self.config["data_loader"]["name"]+"/"+video_name+"/frame_"+str(i)+".png"
 
                 frame = (frame - frame.min()) / (frame.max() - frame.min()) * 255.0
