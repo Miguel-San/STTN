@@ -83,12 +83,12 @@ class Dataset(torch.utils.data.Dataset):
 
 
 def get_ref_index(length, sample_length):
-    if random.uniform(0, 1) > 0.5:
-        ref_index = random.sample(range(length), sample_length)
-        ref_index.sort()
-    else:
-        pivot = random.randint(0, length-sample_length)
-        ref_index = [pivot+i for i in range(sample_length)]
+    # if random.uniform(0, 1) > 0.5:
+    #     ref_index = random.sample(range(length), sample_length)
+    #     ref_index.sort()
+    # else:
+    pivot = random.randint(0, length-sample_length)
+    ref_index = [pivot+i for i in range(sample_length)]
     return ref_index
 
 
