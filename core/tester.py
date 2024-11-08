@@ -70,10 +70,10 @@ class Tester():
         for video_name, frames in comp_frames.items():
             print(len(comp_frames[video_name]), comp_frames[video_name][0].shape)
 
-            comp_mean_frames[video_name] = np.empty((video_len[video_name], *comp_frames[video_name][0].shape[-3:]))
+            comp_mean_frames[video_name] = np.empty((video_len[video_name], *comp_frames[video_name][0].shape[-int(win_len/2):]))
             for i in tqdm(range(video_len[video_name]), desc=video_name):
                 win_indices, frame_indices = TestDataset.get_win_idx_from_frame(i, win_len, video_len[video_name])
-                frame_stack = np.empty((len(win_indices), *comp_frames[video_name][0].shape[-3:]))
+                frame_stack = np.empty((len(win_indices), *comp_frames[video_name][0].shape[-int(win_len/2):]))
                 for j in range(len(win_indices)):
                     frame_stack[j] = comp_frames[video_name][win_indices[j]][0,frame_indices[j],...]
                 comp_mean_frames[video_name][i] = np.mean(frame_stack, axis=0)
