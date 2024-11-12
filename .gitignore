@@ -2,6 +2,7 @@
 release_model
 release_model_dev
 output
+output_dev
 *.log
 debug.py
 *.avi

@@ -80,7 +80,7 @@ class Trainer():
         self.netG = net.InpaintGenerator()
         self.netG = self.netG.to(self.config['device'])
         self.netD = net.Discriminator(
-            in_channels=3, use_sigmoid=config['losses']['GAN_LOSS'] != 'hinge')
+            in_channels=1, use_sigmoid=config['losses']['GAN_LOSS'] != 'hinge')
         self.netD = self.netD.to(self.config['device'])
         self.optimG = torch.optim.Adam(
             self.netG.parameters(), 

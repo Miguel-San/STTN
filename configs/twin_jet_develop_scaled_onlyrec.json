@@ -6,7 +6,7 @@
     "local_rank" : 0,
     "device_int" : 1,
     "data_loader": {
-        "name": "twin_jet_develop_scaled",
+        "name": "twin_jet_develop_scaled_onlyrec",
         "data_root": "datasets/",
         "w": 512,
         "h": 352,
@@ -16,7 +16,7 @@
     "losses": {
         "hole_weight": 10,
         "valid_weight": 1,
-        "adversarial_weight": 0.01,
+        "adversarial_weight": 0,
         "GAN_LOSS": "hinge"
     },
     "trainer": {
