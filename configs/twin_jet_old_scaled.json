@@ -4,7 +4,7 @@
     "results_dir": "output/",
     "global_rank" : 0,
     "local_rank" : 0,
-    "device_int" : 1,
+    "device_int" : 2,
     "data_loader": {
         "name": "twin_jet_old_scaled",
         "data_root": "datasets/",
