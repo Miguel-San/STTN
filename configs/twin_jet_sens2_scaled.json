@@ -1,0 +1,41 @@
+{
+    "seed": 2020,
+    "save_dir": "release_model/",
+    "results_dir": "output/",
+    "global_rank" : 0,
+    "local_rank" : 0,
+    "device_int" : 1,
+    "data_loader": {
+        "name": "twin_jet_sens2_scaled",
+        "data_root": "datasets/",
+        "w": 512,
+        "h": 352,
+        "sample_length": 5,
+        "img_ext": "png"
+    },
+    "losses": {
+        "hole_weight": 10,
+        "valid_weight": 1,
+        "adversarial_weight": 0.01,
+        "GAN_LOSS": "hinge"
+    },
+    "trainer": {
+        "type": "Adam",
+        "beta1": 0,
+        "beta2": 0.99,
+        "lr": 1e-4,
+        "d2glr": 1, 
+        "batch_size": 6,
+        "num_workers": 0,
+        "verbosity": 2,
+        "log_freq": 100,
+        "save_freq": 500,
+        "valid_freq": 250, 
+        "iterations" :10000,
+        "niter": 30e4,
+        "niter_steady": 30e4
+    },
+    "tester": {
+        "num_workers": 0
+    }
+}
