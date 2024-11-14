@@ -19,7 +19,6 @@ date
 hostname
 eval "$(conda shell.bash hook)"
 conda activate AIRML
-##python train.py --config configs/twin_jet_old_scaled.json --model sttn
-##python train.py --config configs/davis.json --model sttn
-python test_custom.py --config configs/twin_jet_old_scaled.json --model sttn --ckpt 3500 --ds_name full_ds_1e4
+python train.py --config configs/twin_jet_develop_scaled_vg.json --model sttn
+##python test_custom.py --config configs/twin_jet_old_scaled_vg.json --model sttn --ckpt 3500 --ds_name full_ds_1e4
 date

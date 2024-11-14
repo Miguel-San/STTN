@@ -11,6 +11,8 @@ import numpy as np
 from PIL import Image
 from math import log10
 
+from joblib import Parallel, delayed
+
 from functools import partial
 import torch
 import torch.nn as nn
@@ -25,6 +27,7 @@ import torch.distributed as dist
 
 from core.dataset import Dataset, TestDataset
 from core.loss import AdversarialLoss
+from core.vg_regularizer import VGRegularizer
 
 
 class Trainer():
@@ -74,6 +77,15 @@ class Trainer():
         self.adversarial_loss = AdversarialLoss(type=self.config['losses']['GAN_LOSS'])
         self.adversarial_loss = self.adversarial_loss.to(self.config['device'])
         self.l1_loss = nn.L1Loss()
+
+        vg_coords_raw = self.config["losses"]["vg_coords"]
+        self.vg_coords = []
+        for ymin, ymax in vg_coords_raw:
+            self.vg_coords += list(range(ymin, ymax+1))
+
+        print("****************** DEBUG ***********************")
+        print(self.vg_coords)
+        print("************************************************")
 
         # setup models including generator and discriminator
         net = importlib.import_module('model.'+config['model'])
@@ -271,6 +283,24 @@ class Trainer():
             gen_loss += valid_loss 
             # self.add_summary(
             #     self.gen_writer, 'loss/valid_loss', valid_loss.item())
+
+            # Visibility Graph Regularizer
+            vg_count = 0
+            for i in range(pred_img.shape[0]):                
+                for k in range(len(self.vg_coords)):
+                    coord = self.vg_coords[k]
+                    pred_series = pred_img[i, :, coord, :]
+                    orig_series = frames.view(b*t, c, h, w)[i, :, coord, :]
+
+                    vg_pred = VGRegularizer()
+                    vg_pred.build(pred_series.flatten())
+
+                    vg_orig = VGRegularizer()
+                    vg_orig.build(orig_series.flatten())
+
+                    vg_loss = self.l1_loss(vg_pred.G, vg_orig.G) * self.config['losses']['vg_weight']
+                    vg_count += 1
+            gen_loss += vg_loss/vg_count
             
             self.optimG.zero_grad()
             gen_loss.backward()
@@ -280,8 +310,9 @@ class Trainer():
             if self.config['global_rank'] == 0:
                 pbar.update(1)
                 pbar.set_description((
-                    f"d: {dis_loss.item():.3f}; g: {gan_loss.item():.3f};"
-                    f"hole: {hole_loss.item():.3f}; valid: {valid_loss.item():.3f}")
+                    f"d: {dis_loss.item():.3f}; g: {gan_loss.item():.3f}; "
+                    f"hole: {hole_loss.item():.3f}; valid: {valid_loss.item():.3f}; "
+                    f"vg: {vg_loss.item():.3f}")
                 )
 
             # Tensorboard logs
@@ -291,7 +322,8 @@ class Trainer():
                     'gan_loss': gan_loss.item(),
                     'hole_loss': hole_loss.item(),
                     'valid_loss': valid_loss.item(),
-                    "gen_loss": gen_loss.item()
+                    "gen_loss": gen_loss.item(),
+                    "vg_loss": vg_loss.item()
                 }
 
                 self.netD.eval()
@@ -328,6 +360,25 @@ class Trainer():
                         valid_loss = self.l1_loss(pred_img*(1-masks), frames*(1-masks))
                         valid_loss = valid_loss / torch.mean(1-masks) * self.config['losses']['valid_weight']
                         gen_loss += valid_loss 
+
+                        # Visibility Graph Regularizer
+                        vg_count = 0
+                        for i in range(pred_img.shape[0]):                
+                            for k in range(len(self.vg_coords)):
+                                coord = self.vg_coords[k]
+                                pred_series = pred_img[i, :, coord, :]
+                                orig_series = frames.view(b*t, c, h, w)[i, :, coord, :]
+
+                                vg_pred = VGRegularizer()
+                                vg_pred.build(pred_series.flatten())
+
+                                vg_orig = VGRegularizer()
+                                vg_orig.build(orig_series.flatten())
+
+                                vg_loss = self.l1_loss(vg_pred.G, vg_orig.G) * self.config['losses']['vg_weight']
+                                vg_count += 1
+                        gen_loss += vg_loss/vg_count
+
                         break
 
                 loss_dict_val = {
@@ -335,7 +386,8 @@ class Trainer():
                     'gan_loss': gan_loss.item(),
                     'hole_loss': hole_loss.item(),
                     'valid_loss': valid_loss.item(),
-                    "gen_loss": gen_loss.item()
+                    "gen_loss": gen_loss.item(),
+                    "vg_loss": vg_loss.item()
                 }
 
                 for k in loss_dict.keys():
