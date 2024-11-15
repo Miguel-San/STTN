@@ -4,7 +4,7 @@
     "results_dir": "output_vg/",
     "global_rank" : 0,
     "local_rank" : 0,
-    "device_int" : 2,
+    "device_int" : 3,
     "data_loader": {
         "name": "twin_jet_develop_scaled",
         "data_root": "datasets/",
