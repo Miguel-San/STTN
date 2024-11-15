@@ -12,6 +12,7 @@ import torch
 from torch.utils.data import DataLoader
 
 from core.dataset import Dataset, TestDataset
+from joblib import Parallel, delayed
 
 class Tester():
     def __init__(self, config):
@@ -79,14 +80,25 @@ class Tester():
                 comp_mean_frames[video_name][i] = np.mean(frame_stack, axis=0)
 
         print("Saving...")
+        def save_frame(video_name, frame, i, config):
+            img_path = f"{config['results_dir']}/{config['data_loader']['name']}/{video_name}/frame_{i}.png"
+            frame = (frame - frame.min()) / (frame.max() - frame.min()) * 255.0
+            frame = frame.astype(np.uint8)
+            img = Image.fromarray(np.moveaxis(frame, 0, -1)[..., ::-1], mode="RGB")
+            img.save(img_path)
+
         # Save the completed frames as separate images
         for video_name, frames in comp_mean_frames.items():
             os.makedirs(self.config["results_dir"]+"/"+self.config["data_loader"]["name"]+"/"+video_name, exist_ok=True)
-            for i, frame in tqdm(enumerate(frames), desc=video_name, total=len(frames)):
-                img_path = self.config["results_dir"]+"/"+self.config["data_loader"]["name"]+"/"+video_name+"/frame_"+str(i)+".png"
+            # for i, frame in tqdm(enumerate(frames), desc=video_name, total=len(frames)):
+            #     img_path = self.config["results_dir"]+"/"+self.config["data_loader"]["name"]+"/"+video_name+"/frame_"+str(i)+".png"
 
-                frame = (frame - frame.min()) / (frame.max() - frame.min()) * 255.0
-                frame = frame.astype(np.uint8)
+            #     frame = (frame - frame.min()) / (frame.max() - frame.min()) * 255.0
+            #     frame = frame.astype(np.uint8)
 
-                img = Image.fromarray(np.moveaxis(frame, 0, -1)[...,::-1], mode="RGB")
-                img.save(img_path)
+            #     img = Image.fromarray(np.moveaxis(frame, 0, -1)[...,::-1], mode="RGB")
+            #     img.save(img_path)            
+
+            Parallel(n_jobs=-1, verbose=1)(
+                delayed(save_frame)(video_name, frame, i, self.config) for i, frame in enumerate(frames)
+            )
