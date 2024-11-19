@@ -1,12 +1,12 @@
 {
     "seed": 2020,
-    "save_dir": "release_model_1ch/",
-    "results_dir": "output_1ch/",
+    "save_dir": "release_model_1ch_rw/",
+    "results_dir": "output_1ch_rw/",
     "global_rank" : 0,
     "local_rank" : 0,
-    "device_int" : 3,
+    "device_int" : 1,
     "data_loader": {
-        "name": "twin_jet_develop_scaled",
+        "name": "twin_jet_old_scaled",
         "data_root": "datasets/",
         "w": 512,
         "h": 352,
@@ -14,7 +14,7 @@
         "img_ext": "png"
     },
     "losses": {
-        "hole_weight": 10,
+        "hole_weight": 100,
         "valid_weight": 1,
         "adversarial_weight": 0.01,
         "GAN_LOSS": "hinge",
