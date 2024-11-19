@@ -285,22 +285,25 @@ class Trainer():
             #     self.gen_writer, 'loss/valid_loss', valid_loss.item())
 
             # Visibility Graph Regularizer
-            vg_count = 0
-            for i in range(pred_img.shape[0]):                
-                for k in range(len(self.vg_coords)):
-                    coord = self.vg_coords[k]
-                    pred_series = pred_img[i, :, coord, :]
-                    orig_series = frames.view(b*t, c, h, w)[i, :, coord, :]
+            if self.config['losses']['vg_weight'] > 0:
+                vg_count = 0
+                for i in range(pred_img.shape[0]):                
+                    for k in range(len(self.vg_coords)):
+                        coord = self.vg_coords[k]
+                        pred_series = pred_img[i, :, coord, :]
+                        orig_series = frames.view(b*t, c, h, w)[i, :, coord, :]
 
-                    vg_pred = VGRegularizer()
-                    vg_pred.build(pred_series.flatten())
+                        vg_pred = VGRegularizer()
+                        vg_pred.build(pred_series.flatten())
 
-                    vg_orig = VGRegularizer()
-                    vg_orig.build(orig_series.flatten())
+                        vg_orig = VGRegularizer()
+                        vg_orig.build(orig_series.flatten())
 
-                    vg_loss = self.l1_loss(vg_pred.G, vg_orig.G) * self.config['losses']['vg_weight']
-                    vg_count += 1
-            gen_loss += vg_loss/vg_count
+                        vg_loss = self.l1_loss(vg_pred.G, vg_orig.G) * self.config['losses']['vg_weight']
+                        vg_count += 1
+                gen_loss += vg_loss/vg_count
+            else:
+                vg_loss = torch.tensor([0]).to(device)
             
             self.optimG.zero_grad()
             gen_loss.backward()
@@ -362,22 +365,25 @@ class Trainer():
                         gen_loss += valid_loss 
 
                         # Visibility Graph Regularizer
-                        vg_count = 0
-                        for i in range(pred_img.shape[0]):                
-                            for k in range(len(self.vg_coords)):
-                                coord = self.vg_coords[k]
-                                pred_series = pred_img[i, :, coord, :]
-                                orig_series = frames.view(b*t, c, h, w)[i, :, coord, :]
+                        if self.config['losses']['vg_weight'] > 0:
+                            vg_count = 0
+                            for i in range(pred_img.shape[0]):                
+                                for k in range(len(self.vg_coords)):
+                                    coord = self.vg_coords[k]
+                                    pred_series = pred_img[i, :, coord, :]
+                                    orig_series = frames.view(b*t, c, h, w)[i, :, coord, :]
 
-                                vg_pred = VGRegularizer()
-                                vg_pred.build(pred_series.flatten())
+                                    vg_pred = VGRegularizer()
+                                    vg_pred.build(pred_series.flatten())
 
-                                vg_orig = VGRegularizer()
-                                vg_orig.build(orig_series.flatten())
+                                    vg_orig = VGRegularizer()
+                                    vg_orig.build(orig_series.flatten())
 
-                                vg_loss = self.l1_loss(vg_pred.G, vg_orig.G) * self.config['losses']['vg_weight']
-                                vg_count += 1
-                        gen_loss += vg_loss/vg_count
+                                    vg_loss = self.l1_loss(vg_pred.G, vg_orig.G) * self.config['losses']['vg_weight']
+                                    vg_count += 1
+                            gen_loss += vg_loss/vg_count
+                        else:
+                            vg_loss = torch.tensor([0]).to(device)
 
                         break
 
