@@ -1,25 +1,25 @@
 {
     "seed": 2020,
-    "save_dir": "release_model_1ch_rw/",
-    "results_dir": "output_1ch_rw/",
+    "save_dir": "release_model_vg_w11/",
+    "results_dir": "output_vg_w11/",
     "global_rank" : 0,
     "local_rank" : 0,
-    "device_int" : 1,
+    "device_int" : 0,
     "data_loader": {
         "name": "twin_jet_old_scaled",
         "data_root": "datasets/",
         "w": 512,
         "h": 352,
-        "sample_length": 5,
+        "sample_length": 11,
         "img_ext": "png"
     },
     "losses": {
-        "hole_weight": 100,
+        "hole_weight": 10,
         "valid_weight": 1,
         "adversarial_weight": 0.01,
         "GAN_LOSS": "hinge",
 
-        "vg_weight" : 0,
+        "vg_weight" : 1,
         "vg_coords" : [[30, 50], [295, 315]]
     },
     "trainer": {
@@ -34,7 +34,7 @@
         "log_freq": 100,
         "save_freq": 500,
         "valid_freq": 250, 
-        "iterations" :10000,
+        "iterations" :6000,
         "niter": 30e4,
         "niter_steady": 30e4
     },

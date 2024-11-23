@@ -4,6 +4,8 @@ release_model_dev
 release_model_vg
 release_model_1ch
 release_model_1ch_rw
+release_model**
+output**
 output
 output_dev
 *.log
