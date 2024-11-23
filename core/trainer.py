@@ -18,14 +18,14 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Subset
 from torch.utils.data.distributed import DistributedSampler
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.tensorboard import SummaryWriter
 from torchvision.utils import make_grid, save_image
 import torch.distributed as dist
 
-from core.dataset import Dataset, TestDataset
+from core.dataset import Dataset
 from core.loss import AdversarialLoss
 from core.vg_regularizer import VGRegularizer
 
@@ -57,9 +57,9 @@ class Trainer():
             sampler=self.train_sampler)
         
         # Test dataset
-        self.test_dataset = TestDataset(config['data_loader'], split='test', debug=debug)
+        self.test_dataset = Dataset(config['data_loader'], split='test', debug=debug)
         self.control_imgs_loader = DataLoader(
-            self.test_dataset,
+            Subset(self.test_dataset, indices=[0]),
             batch_size=1,
             shuffle=False,
             num_workers=self.train_args['num_workers'],
@@ -72,6 +72,7 @@ class Trainer():
             num_workers=self.train_args['num_workers'],
             sampler=None
         )
+        self.test_iterations = self.train_args.get("test_iterations", None)
 
         # set loss functions 
         self.adversarial_loss = AdversarialLoss(type=self.config['losses']['GAN_LOSS'])
@@ -234,221 +235,261 @@ class Trainer():
     def _train_epoch(self, pbar):
         device = self.config['device']
 
-        for frames, masks in self.train_loader:
-            self.adjust_learning_rate()
-            self.iteration += 1
+        while self.iteration <= self.train_args['iterations']:
+            for frames, masks in self.train_loader:
+                self.adjust_learning_rate()
+                self.iteration += 1
 
-            frames, masks = frames.to(device), masks.to(device)
-            b, t, c, h, w = frames.size()
-            masked_frame = (frames * (1 - masks).float())
-            pred_img = self.netG(masked_frame, masks)
-            frames = frames.view(b*t, c, h, w)
-            masks = masks.view(b*t, 1, h, w)
-            comp_img = frames*(1.-masks) + masks*pred_img
+                frames, masks = frames.to(device), masks.to(device)
+                b, t, c, h, w = frames.size()
+                masked_frame = (frames * (1 - masks).float())
+                pred_img = self.netG(masked_frame, masks)
+                frames = frames.view(b*t, c, h, w)
+                masks = masks.view(b*t, 1, h, w)
+                comp_img = frames*(1.-masks) + masks*pred_img
 
-            gen_loss = 0
-            dis_loss = 0
+                gen_loss = 0
+                dis_loss = 0
 
-            # discriminator adversarial loss
-            real_vid_feat = self.netD(frames)
-            fake_vid_feat = self.netD(comp_img.detach())
-            dis_real_loss = self.adversarial_loss(real_vid_feat, True, True)
-            dis_fake_loss = self.adversarial_loss(fake_vid_feat, False, True)
-            dis_loss += (dis_real_loss + dis_fake_loss) / 2
-            # self.add_summary(
-            #     self.dis_writer, 'loss/dis_vid_fake', dis_fake_loss.item())
-            # self.add_summary(
-            #     self.dis_writer, 'loss/dis_vid_real', dis_real_loss.item())
-            self.optimD.zero_grad()
-            dis_loss.backward()
-            self.optimD.step()
+                # discriminator adversarial loss
+                real_vid_feat = self.netD(frames)
+                fake_vid_feat = self.netD(comp_img.detach())
+                dis_real_loss = self.adversarial_loss(real_vid_feat, True, True)
+                dis_fake_loss = self.adversarial_loss(fake_vid_feat, False, True)
+                dis_loss += (dis_real_loss + dis_fake_loss) / 2
+                # self.add_summary(
+                #     self.dis_writer, 'loss/dis_vid_fake', dis_fake_loss.item())
+                # self.add_summary(
+                #     self.dis_writer, 'loss/dis_vid_real', dis_real_loss.item())
+                self.optimD.zero_grad()
+                dis_loss.backward()
+                self.optimD.step()
 
-            # generator adversarial loss
-            gen_vid_feat = self.netD(comp_img)
-            gan_loss = self.adversarial_loss(gen_vid_feat, True, False)
-            gan_loss = gan_loss * self.config['losses']['adversarial_weight']
-            gen_loss += gan_loss
-            # self.add_summary(
-            #     self.gen_writer, 'loss/gan_loss', gan_loss.item())
+                # generator adversarial loss
+                gen_vid_feat = self.netD(comp_img)
+                gan_loss = self.adversarial_loss(gen_vid_feat, True, False)
+                gan_loss = gan_loss * self.config['losses']['adversarial_weight']
+                gen_loss += gan_loss
+                # self.add_summary(
+                #     self.gen_writer, 'loss/gan_loss', gan_loss.item())
 
-            # generator l1 loss
-            hole_loss = self.l1_loss(pred_img*masks, frames*masks)
-            hole_loss = hole_loss / torch.mean(masks) * self.config['losses']['hole_weight']
-            gen_loss += hole_loss 
-            # self.add_summary(
-            #     self.gen_writer, 'loss/hole_loss', hole_loss.item())
+                # generator l1 loss
+                hole_loss = self.l1_loss(pred_img*masks, frames*masks)
+                hole_loss = hole_loss / torch.mean(masks) * self.config['losses']['hole_weight']
+                gen_loss += hole_loss 
+                # self.add_summary(
+                #     self.gen_writer, 'loss/hole_loss', hole_loss.item())
 
-            valid_loss = self.l1_loss(pred_img*(1-masks), frames*(1-masks))
-            valid_loss = valid_loss / torch.mean(1-masks) * self.config['losses']['valid_weight']
-            gen_loss += valid_loss 
-            # self.add_summary(
-            #     self.gen_writer, 'loss/valid_loss', valid_loss.item())
+                valid_loss = self.l1_loss(pred_img*(1-masks), frames*(1-masks))
+                valid_loss = valid_loss / torch.mean(1-masks) * self.config['losses']['valid_weight']
+                gen_loss += valid_loss 
+                # self.add_summary(
+                #     self.gen_writer, 'loss/valid_loss', valid_loss.item())
 
-            # Visibility Graph Regularizer
-            if self.config['losses']['vg_weight'] > 0:
-                vg_count = 0
-                for i in range(pred_img.shape[0]):                
-                    for k in range(len(self.vg_coords)):
-                        coord = self.vg_coords[k]
-                        pred_series = pred_img[i, :, coord, :]
-                        orig_series = frames.view(b*t, c, h, w)[i, :, coord, :]
+                # Visibility Graph Regularizer
+                if self.config['losses']['vg_weight'] > 0:
+                    vg_count = 0
+                    for i in range(pred_img.shape[0]):                
+                        for k in range(len(self.vg_coords)):
+                            coord = self.vg_coords[k]
+                            pred_series = pred_img[i, :, coord, :]
+                            orig_series = frames.view(b*t, c, h, w)[i, :, coord, :]
 
-                        vg_pred = VGRegularizer()
-                        vg_pred.build(pred_series.flatten())
+                            vg_pred = VGRegularizer()
+                            vg_pred.build(pred_series.flatten())
 
-                        vg_orig = VGRegularizer()
-                        vg_orig.build(orig_series.flatten())
+                            vg_orig = VGRegularizer()
+                            vg_orig.build(orig_series.flatten())
 
-                        vg_loss = self.l1_loss(vg_pred.G, vg_orig.G) * self.config['losses']['vg_weight']
-                        vg_count += 1
-                gen_loss += vg_loss/vg_count
-            else:
-                vg_loss = torch.tensor([0]).to(device)
-            
-            self.optimG.zero_grad()
-            gen_loss.backward()
-            self.optimG.step()
+                            vg_loss = self.l1_loss(vg_pred.G, vg_orig.G) * self.config['losses']['vg_weight']
+                            vg_count += 1
+                    gen_loss += vg_loss/vg_count
+                else:
+                    vg_loss = torch.tensor([0]).to(device)
+                
+                self.optimG.zero_grad()
+                gen_loss.backward()
+                self.optimG.step()
 
-            # console logs
-            if self.config['global_rank'] == 0:
-                pbar.update(1)
-                pbar.set_description((
-                    f"d: {dis_loss.item():.3f}; g: {gan_loss.item():.3f}; "
-                    f"hole: {hole_loss.item():.3f}; valid: {valid_loss.item():.3f}; "
-                    f"vg: {vg_loss.item():.3f}")
-                )
+                # console logs
+                if self.config['global_rank'] == 0:
+                    pbar.update(1)
+                    pbar.set_description((
+                        f"d: {dis_loss.item():.3f}; g: {gan_loss.item():.3f}; "
+                        f"hole: {hole_loss.item():.3f}; valid: {valid_loss.item():.3f}; "
+                        f"vg: {vg_loss.item():.3f}")
+                    )
 
-            # Tensorboard logs
-            if self.iteration % self.train_args["log_freq"] == 0:
-                loss_dict = {
-                    'dis_loss': dis_loss.item(),
-                    'gan_loss': gan_loss.item(),
-                    'hole_loss': hole_loss.item(),
-                    'valid_loss': valid_loss.item(),
-                    "gen_loss": gen_loss.item(),
-                    "vg_loss": vg_loss.item()
-                }
+                # Tensorboard logs
+                if self.iteration % self.train_args["log_freq"] == 0:
+                    loss_dict = {
+                        'dis_loss': dis_loss.item(),
+                        'gan_loss': gan_loss.item(),
+                        'hole_loss': hole_loss.item(),
+                        'valid_loss': valid_loss.item(),
+                        "gen_loss": gen_loss.item(),
+                        "vg_loss": vg_loss.item()
+                    }
 
-                self.netD.eval()
-                self.netG.eval()
+                    self.netD.eval()
+                    self.netG.eval()
 
-                with torch.no_grad():
-                    for frames, masks in self.test_loader:
-                        gen_loss = 0
-                        dis_loss = 0
+                    with torch.no_grad():
+                        _testing = True
 
-                        frames, masks = frames.to(device), masks.to(device)
-                        b, t, c, h, w = frames.size()
-                        masked_frame = (frames * (1 - masks).float())
-                        pred_img = self.netG(masked_frame, masks)
-                        frames = frames.view(b*t, c, h, w)
-                        masks = masks.view(b*t, 1, h, w)
-                        comp_img = frames*(1.-masks) + masks*pred_img
+                        dis_loss_batch = []
+                        gan_loss_batch = []
+                        hole_loss_batch = []
+                        valid_loss_batch = []
+                        gen_loss_batch = []
+                        vg_loss_batch = []
 
-                        real_vid_feat = self.netD(frames)
-                        fake_vid_feat = self.netD(comp_img.detach())
-                        dis_real_loss = self.adversarial_loss(real_vid_feat, True, True)
-                        dis_fake_loss = self.adversarial_loss(fake_vid_feat, False, True)
-                        dis_loss += (dis_real_loss + dis_fake_loss) / 2
+                        while _testing:
+                            testing_iter = 0
+                            for frames, masks in self.test_loader:
+                                testing_iter += 1
 
-                        gen_vid_feat = self.netD(comp_img)
-                        gan_loss = self.adversarial_loss(gen_vid_feat, True, False)
-                        gan_loss = gan_loss * self.config['losses']['adversarial_weight']
-                        gen_loss += gan_loss
+                                gen_loss = 0
+                                dis_loss = 0
 
-                        hole_loss = self.l1_loss(pred_img*masks, frames*masks)
-                        hole_loss = hole_loss / torch.mean(masks) * self.config['losses']['hole_weight']
-                        gen_loss += hole_loss
+                                frames, masks = frames.to(device), masks.to(device)
+                                b, t, c, h, w = frames.size()
+                                masked_frame = (frames * (1 - masks).float())
+                                pred_img = self.netG(masked_frame, masks)
+                                frames = frames.view(b*t, c, h, w)
+                                masks = masks.view(b*t, 1, h, w)
+                                comp_img = frames*(1.-masks) + masks*pred_img
 
-                        valid_loss = self.l1_loss(pred_img*(1-masks), frames*(1-masks))
-                        valid_loss = valid_loss / torch.mean(1-masks) * self.config['losses']['valid_weight']
-                        gen_loss += valid_loss 
+                                real_vid_feat = self.netD(frames)
+                                fake_vid_feat = self.netD(comp_img.detach())
+                                dis_real_loss = self.adversarial_loss(real_vid_feat, True, True)
+                                dis_fake_loss = self.adversarial_loss(fake_vid_feat, False, True)
+                                dis_loss += (dis_real_loss + dis_fake_loss) / 2
 
-                        # Visibility Graph Regularizer
-                        if self.config['losses']['vg_weight'] > 0:
-                            vg_count = 0
-                            for i in range(pred_img.shape[0]):                
-                                for k in range(len(self.vg_coords)):
-                                    coord = self.vg_coords[k]
-                                    pred_series = pred_img[i, :, coord, :]
-                                    orig_series = frames.view(b*t, c, h, w)[i, :, coord, :]
+                                gen_vid_feat = self.netD(comp_img)
+                                gan_loss = self.adversarial_loss(gen_vid_feat, True, False)
+                                gan_loss = gan_loss * self.config['losses']['adversarial_weight']
+                                gen_loss += gan_loss
 
-                                    vg_pred = VGRegularizer()
-                                    vg_pred.build(pred_series.flatten())
+                                hole_loss = self.l1_loss(pred_img*masks, frames*masks)
+                                hole_loss = hole_loss / torch.mean(masks) * self.config['losses']['hole_weight']
+                                gen_loss += hole_loss
 
-                                    vg_orig = VGRegularizer()
-                                    vg_orig.build(orig_series.flatten())
+                                valid_loss = self.l1_loss(pred_img*(1-masks), frames*(1-masks))
+                                valid_loss = valid_loss / torch.mean(1-masks) * self.config['losses']['valid_weight']
+                                gen_loss += valid_loss 
 
-                                    vg_loss = self.l1_loss(vg_pred.G, vg_orig.G) * self.config['losses']['vg_weight']
-                                    vg_count += 1
-                            gen_loss += vg_loss/vg_count
-                        else:
-                            vg_loss = torch.tensor([0]).to(device)
+                                # Visibility Graph Regularizer
+                                if self.config['losses']['vg_weight'] > 0:
+                                    vg_count = 0
+                                    for i in range(pred_img.shape[0]):                
+                                        for k in range(len(self.vg_coords)):
+                                            coord = self.vg_coords[k]
+                                            pred_series = pred_img[i, :, coord, :]
+                                            orig_series = frames.view(b*t, c, h, w)[i, :, coord, :]
 
-                        break
+                                            vg_pred = VGRegularizer()
+                                            vg_pred.build(pred_series.flatten())
 
-                loss_dict_val = {
-                    'dis_loss': dis_loss.item(),
-                    'gan_loss': gan_loss.item(),
-                    'hole_loss': hole_loss.item(),
-                    'valid_loss': valid_loss.item(),
-                    "gen_loss": gen_loss.item(),
-                    "vg_loss": vg_loss.item()
-                }
+                                            vg_orig = VGRegularizer()
+                                            vg_orig.build(orig_series.flatten())
 
-                for k in loss_dict.keys():
-                    v_tr = loss_dict[k]
-                    v_val = loss_dict_val[k]
+                                            vg_loss = self.l1_loss(vg_pred.G, vg_orig.G) * self.config['losses']['vg_weight']
+                                            vg_count += 1
+                                    gen_loss += vg_loss/vg_count
+                                else:
+                                    vg_loss = torch.tensor([0]).to(device)
 
-                    self.tb_writer.add_scalars("Loss/"+k, {
-                        "Training" : v_tr,
-                        "Validation" : v_val
-                    }, self.iteration)
+                                dis_loss_batch.append(dis_loss.item())
+                                gan_loss_batch.append(gan_loss.item())
+                                hole_loss_batch.append(hole_loss.item())
+                                valid_loss_batch.append(valid_loss.item())
+                                gen_loss_batch.append(gen_loss.item())
+                                vg_loss_batch.append(vg_loss.item())
 
-            # Control images            
-            if self.iteration % self.train_args['valid_freq'] == 0:
-                win_len = self.config['data_loader']['sample_length']
-                self.netG.eval()
-                with torch.no_grad():
-                    for i, (frames, masks) in enumerate(self.control_imgs_loader):
-                        video_name = self.test_dataset.video_names[i]
-                        video_len = frames.shape[1]
-                        orig_frames = []
-                        pred_frames = []
-                        comp_frames = []
-                        # for f in range(video_len-10-win_len, video_len-10):
-                        for f in range(win_len//2+1, win_len//2 + 1 + win_len):
-                            frames_win = frames[:, f:f+win_len]
-                            masks_win = masks[:, f:f+win_len]
-                            frames_win, masks_win = frames_win.to(device), masks_win.to(device)
-                            b, t, c, h, w = frames_win.size()
-                            masked_frame = (frames_win * (1 - masks_win).float())
-                            pred_img = self.netG(masked_frame, masks_win)
-                            frames_win = frames_win.view(b*t, c, h, w)
-                            masks_win = masks_win.view(b*t, 1, h, w)
-                            comp_img = frames_win*(1.-masks_win) + masks_win*pred_img
+                                if self.test_iterations is not None:
+                                    if testing_iter > self.test_iterations:
+                                        _testing = False
+                                        break
+
+                            _testing = False
+
+                    loss_dict_val = {
+                        'dis_loss': np.mean(dis_loss_batch),
+                        'gan_loss': np.mean(gan_loss_batch),
+                        'hole_loss': np.mean(hole_loss_batch),
+                        'valid_loss': np.mean(valid_loss_batch),
+                        "gen_loss": np.mean(gen_loss_batch),
+                        "vg_loss": np.mean(vg_loss_batch)
+                    }
+
+                    for k in loss_dict.keys():
+                        v_tr = loss_dict[k]
+                        v_val = loss_dict_val[k]
+
+                        self.tb_writer.add_scalars("Loss/"+k, {
+                            "Training" : v_tr,
+                            "Validation" : v_val
+                        }, self.iteration)
+
+                # Control images            
+                if self.iteration % self.train_args['valid_freq'] == 0:
+                    win_len = self.config['data_loader']['sample_length']
+                    self.netG.eval()
+                    with torch.no_grad():
+                        for i, (frames, masks) in enumerate(self.control_imgs_loader):
+                            video_name = self.test_dataset.video_names[0]
+                            orig_frames = []
+                            pred_frames = []
+                            comp_frames = []
+
+                            frames, masks = frames.to(device), masks.to(device)
+                            b, t, c, h, w = frames.size()
+                            masked_frame = (frames * (1 - masks).float())
+                            pred_img = self.netG(masked_frame, masks)
+                            frames = frames.view(b*t, c, h, w)
+                            masks = masks.view(b*t, 1, h, w)
+                            comp_img = frames*(1.-masks) + masks*pred_img
                             comp_img = comp_img.view(b, t, c, h, w)
                             comp_img = (comp_img + 1) / 2
 
-                            print(win_len, t)
+                            orig_frames.append(((frames.view(b,t,c,h,w)[0,...]+1)/2).cpu().numpy().astype(np.float32))
+                            pred_frames.append(((pred_img.view(b,t,c,h,w)[0,...]+1)/2).cpu().numpy().astype(np.float32))
+                            comp_frames.append(comp_img.view(b,t,c,h,w)[0,...].cpu().numpy().astype(np.float32))
+
+                            # for f in range(video_len-10-win_len, video_len-10):
+                            # for f in range(win_len//2+1, win_len//2 + 1 + win_len):
+                            #     frames_win = frames[:, f:f+win_len]
+                            #     masks_win = masks[:, f:f+win_len]
+                            #     frames_win, masks_win = frames_win.to(device), masks_win.to(device)
+                            #     b, t, c, h, w = frames_win.size()
+                            #     masked_frame = (frames_win * (1 - masks_win).float())
+                            #     pred_img = self.netG(masked_frame, masks_win)
+                            #     frames_win = frames_win.view(b*t, c, h, w)
+                            #     masks_win = masks_win.view(b*t, 1, h, w)
+                            #     comp_img = frames_win*(1.-masks_win) + masks_win*pred_img
+                            #     comp_img = comp_img.view(b, t, c, h, w)
+                            #     comp_img = (comp_img + 1) / 2
+                                
+                            #     orig_frames.append(((frames_win.view(b,t,c,h,w)[0,win_len//2+1,...]+1)/2).cpu().numpy())
+                            #     pred_frames.append(((pred_img.view(b,t,c,h,w)[0,win_len//2+1,...]+1)/2).cpu().numpy())
+                            #     comp_frames.append(comp_img.view(b,t,c,h,w)[0,win_len//2+1,...].cpu().numpy())
+
+                            print(torch.tensor(np.array(orig_frames)).shape, torch.tensor(np.array(pred_frames)).shape, torch.tensor(np.array(comp_frames)).shape)
+
+                            grid = make_grid(torch.cat([
+                                torch.tensor(np.array(orig_frames)[0]), 
+                                torch.tensor(np.array(pred_frames)[0]), 
+                                torch.tensor(np.array(comp_frames)[0])], dim=0), nrow=win_len)
+                            save_dir = os.path.join(self.config['save_dir'], 'control_images')
+                            os.makedirs(save_dir, exist_ok=True)
+                            save_image(grid, os.path.join(save_dir, f'{video_name}_{self.iteration}.png'))
+                    self.netG.train()
                             
-                            orig_frames.append(((frames_win.view(b,t,c,h,w)[0,win_len//2+1,...]+1)/2).cpu().numpy())
-                            pred_frames.append(((pred_img.view(b,t,c,h,w)[0,win_len//2+1,...]+1)/2).cpu().numpy())
-                            comp_frames.append(comp_img.view(b,t,c,h,w)[0,win_len//2+1,...].cpu().numpy())
 
-                        grid = make_grid(torch.cat([
-                            torch.tensor(np.array(orig_frames)), 
-                            torch.tensor(np.array(pred_frames)), 
-                            torch.tensor(np.array(comp_frames))], dim=0), nrow=win_len)
-                        save_dir = os.path.join(self.config['save_dir'], 'control_images')
-                        os.makedirs(save_dir, exist_ok=True)
-                        save_image(grid, os.path.join(save_dir, f'{video_name}_{self.iteration}.png'))
-                self.netG.train()
-                        
-
-            # saving models
-            if self.iteration % self.train_args['save_freq'] == 0:
-                self.save(int(self.iteration))
-            if self.iteration > self.train_args['iterations']:
-                break
+                # saving models
+                if self.iteration % self.train_args['save_freq'] == 0:
+                    self.save(int(self.iteration))
+                if self.iteration > self.train_args['iterations']:
+                    break
 

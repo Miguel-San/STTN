@@ -19,7 +19,7 @@ class Tester():
         self.config = config
         self.test_args = config["tester"]
 
-        self.dataset = TestDataset(config["data_loader"], split=self.config["ds_name"], debug=False)
+        self.dataset = Dataset(config["data_loader"], split=self.config["ds_name"], debug=False)
         self.test_loader = DataLoader(
             self.dataset,
             batch_size = 1,
@@ -38,46 +38,79 @@ class Tester():
 
     def test(self):
         win_len = self.config["data_loader"]["sample_length"]
-        comp_frames = {v_name:[] for v_name in self.dataset.video_names}
+        stride = self.config["data_loader"]["stride"]
+        comp_windows = {v_name:[] for v_name in self.dataset.video_names}
         video_len = {}
 
         print("Predicting...")
         self.netG.eval()
         for i, (frames, masks) in enumerate(self.test_loader):
-            video_name = self.dataset.video_names[i]
-            video_len[video_name] = frames.shape[1]
-            for f in tqdm(range(video_len[video_name]-win_len), desc=video_name):  # Debería ser desde win_len//2+1 hasta video_len[video_name]-win_len//2         
-                frames_win = frames[:, f:f+win_len] # Cambiar a f-win_len//2:f+win_len//2+1
-                masks_win = masks[:, f:f+win_len]
+            video_name = self.dataset.video_names[0]
+            video_len[video_name] = self.dataset.video_length()
 
-                with torch.no_grad():
-                    frames_win, masks_win = frames_win.to(self.config["device"]), masks_win.to(self.config["device"])
-                    b, t, c, h, w = frames_win.size()
-                    masked_frame = (frames_win * (1 - masks_win).float())
-                    pred_img = self.netG(masked_frame, masks_win)
-                    frames_win = frames_win.view(b*t, c, h, w)
-                    masks_win = masks_win.view(b*t, 1, h, w)
-                    comp_img = frames_win*(1.-masks_win) + masks_win*pred_img
-                    comp_img = comp_img.view(b, t, c, h, w)
+            with torch.no_grad():
+                frames, masks = frames.to(self.config["device"]), masks.to(self.config["device"])
+                b, t, c, h, w = frames.size()
+                masked_frame = (frames * (1 - masks).float())
+                pred_img = self.netG(masked_frame, masks)
+                frames = frames.view(b*t, c, h, w)
+                masks = masks.view(b*t, 1, h, w)
+                comp_img = frames*(1.-masks) + masks*pred_img
+                comp_img = comp_img.view(b, t, c, h, w)
 
-                    comp_img = (comp_img + 1) / 2
+                comp_img = (comp_img + 1) / 2
 
-                    comp_frames[video_name].append(comp_img.cpu().numpy())
-                    # comp_frames[video_name].append(pred_img.view(b,t,c,h,w).cpu().numpy())
+                comp_windows[video_name].append(comp_img.cpu().numpy())
+
+            # for f in tqdm(range(video_len[video_name]-win_len), desc=video_name):  # Debería ser desde win_len//2+1 hasta video_len[video_name]-win_len//2         
+            #     frames_win = frames[:, f:f+win_len] # Cambiar a f-win_len//2:f+win_len//2+1
+            #     masks_win = masks[:, f:f+win_len]
+
+            #     with torch.no_grad():
+            #         frames_win, masks_win = frames_win.to(self.config["device"]), masks_win.to(self.config["device"])
+            #         b, t, c, h, w = frames_win.size()
+            #         masked_frame = (frames_win * (1 - masks_win).float())
+            #         pred_img = self.netG(masked_frame, masks_win)
+            #         frames_win = frames_win.view(b*t, c, h, w)
+            #         masks_win = masks_win.view(b*t, 1, h, w)
+            #         comp_img = frames_win*(1.-masks_win) + masks_win*pred_img
+            #         comp_img = comp_img.view(b, t, c, h, w)
+
+            #         comp_img = (comp_img + 1) / 2
+
+            #         comp_frames[video_name].append(comp_img.cpu().numpy())
+            #         # comp_frames[video_name].append(pred_img.view(b,t,c,h,w).cpu().numpy())
 
         print("Promediating each frame for every window...")
         # Promediate each frame with corresponding generated frames in each window
+        comp_frames = {}
         comp_mean_frames = {}
-        for video_name, frames in comp_frames.items():
-            print(len(comp_frames[video_name]), comp_frames[video_name][0].shape)
+        for video_name, frames in comp_windows.items():
+            print(len(comp_windows[video_name]), comp_windows[video_name][0].shape)
 
-            comp_mean_frames[video_name] = np.empty((video_len[video_name], *comp_frames[video_name][0].shape[-int(win_len/2):])) # <--- Qué es esto?
-            for i in tqdm(range(video_len[video_name]), desc=video_name): # Separar en tres loops: 0:win_len//2, win_len//2:video_len-win_len//2, video_len-win_len//2:video_len
-                win_indices, frame_indices = TestDataset.get_win_idx_from_frame(i, win_len, video_len[video_name])
-                frame_stack = np.empty((len(win_indices), *comp_frames[video_name][0].shape[-int(win_len/2):]))
-                for j in range(len(win_indices)):
-                    frame_stack[j] = comp_frames[video_name][win_indices[j]][0,frame_indices[j],...]
-                comp_mean_frames[video_name][i] = np.mean(frame_stack, axis=0)
+            comp_frames[video_name] = [[] for _ in range(video_len[video_name])]
+            comp_mean_frames[video_name] = np.empty((video_len[video_name], *comp_windows[video_name][0].shape[-int(win_len/2):]))
+            # Loop iterating through all windows
+            for i in tqdm(len(comp_windows[video_name]), desc=video_name):
+                # Loop iterating through all frames in each window
+                for j in range(len(comp_windows[video_name][i])):
+                    comp_frames[video_name][i+j*stride].append(comp_windows[video_name][i][j])
+
+            # Promediate each frame with corresponding generated frames in each window
+            for i in tqdm(range(video_len[video_name]), desc=video_name):
+                comp_mean_frames[video_name][i] = np.mean(comp_frames[video_name][i])
+
+        # comp_mean_frames = {}
+        # for video_name, frames in comp_windows.items():
+        #     print(len(comp_windows[video_name]), comp_windows[video_name][0].shape)
+
+        #     comp_mean_frames[video_name] = np.empty((video_len[video_name], *comp_windows[video_name][0].shape[-int(win_len/2):])) # <--- Qué es esto?
+        #     for i in tqdm(range(video_len[video_name]), desc=video_name): # Separar en tres loops: 0:win_len//2, win_len//2:video_len-win_len//2, video_len-win_len//2:video_len
+        #         win_indices, frame_indices = TestDataset.get_win_idx_from_frame(i, win_len, video_len[video_name])
+        #         frame_stack = np.empty((len(win_indices), *comp_windows[video_name][0].shape[-int(win_len/2):]))
+        #         for j in range(len(win_indices)):
+        #             frame_stack[j] = comp_windows[video_name][win_indices[j]][0,frame_indices[j],...]
+        #         comp_mean_frames[video_name][i] = np.mean(frame_stack, axis=0)
 
         print("Saving...")
         def save_frame(video_name, frame, i, config):
