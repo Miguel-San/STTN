@@ -46,8 +46,8 @@ class Tester():
         for i, (frames, masks) in enumerate(self.test_loader):
             video_name = self.dataset.video_names[i]
             video_len[video_name] = frames.shape[1]
-            for f in tqdm(range(video_len[video_name]-win_len), desc=video_name):                
-                frames_win = frames[:, f:f+win_len]
+            for f in tqdm(range(video_len[video_name]-win_len), desc=video_name):  # Debería ser desde win_len//2+1 hasta video_len[video_name]-win_len//2         
+                frames_win = frames[:, f:f+win_len] # Cambiar a f-win_len//2:f+win_len//2+1
                 masks_win = masks[:, f:f+win_len]
 
                 with torch.no_grad():
@@ -71,8 +71,8 @@ class Tester():
         for video_name, frames in comp_frames.items():
             print(len(comp_frames[video_name]), comp_frames[video_name][0].shape)
 
-            comp_mean_frames[video_name] = np.empty((video_len[video_name], *comp_frames[video_name][0].shape[-int(win_len/2):]))
-            for i in tqdm(range(video_len[video_name]), desc=video_name):
+            comp_mean_frames[video_name] = np.empty((video_len[video_name], *comp_frames[video_name][0].shape[-int(win_len/2):])) # <--- Qué es esto?
+            for i in tqdm(range(video_len[video_name]), desc=video_name): # Separar en tres loops: 0:win_len//2, win_len//2:video_len-win_len//2, video_len-win_len//2:video_len
                 win_indices, frame_indices = TestDataset.get_win_idx_from_frame(i, win_len, video_len[video_name])
                 frame_stack = np.empty((len(win_indices), *comp_frames[video_name][0].shape[-int(win_len/2):]))
                 for j in range(len(win_indices)):
@@ -90,15 +90,15 @@ class Tester():
         # Save the completed frames as separate images
         for video_name, frames in comp_mean_frames.items():
             os.makedirs(self.config["results_dir"]+"/"+self.config["data_loader"]["name"]+"/"+video_name, exist_ok=True)
-            # for i, frame in tqdm(enumerate(frames), desc=video_name, total=len(frames)):
-            #     img_path = self.config["results_dir"]+"/"+self.config["data_loader"]["name"]+"/"+video_name+"/frame_"+str(i)+".png"
+            for i, frame in tqdm(enumerate(frames), desc=video_name, total=len(frames)):
+                img_path = self.config["results_dir"]+"/"+self.config["data_loader"]["name"]+"/"+video_name+"/frame_"+str(i)+".png"
 
-            #     frame = (frame - frame.min()) / (frame.max() - frame.min()) * 255.0
-            #     frame = frame.astype(np.uint8)
+                frame = (frame - frame.min()) / (frame.max() - frame.min()) * 255.0
+                frame = frame.astype(np.uint8)
 
-            #     img = Image.fromarray(np.moveaxis(frame, 0, -1)[...,::-1], mode="RGB")
-            #     img.save(img_path)            
+                img = Image.fromarray(np.squeeze(frame), mode="L")
+                img.save(img_path)            
 
-            Parallel(n_jobs=-1, verbose=1)(
-                delayed(save_frame)(video_name, frame, i, self.config) for i, frame in enumerate(frames)
-            )
+            # Parallel(n_jobs=-1, verbose=1)(
+            #     delayed(save_frame)(video_name, frame, i, self.config) for i, frame in enumerate(frames)
+            # )

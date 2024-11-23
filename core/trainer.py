@@ -416,7 +416,8 @@ class Trainer():
                         orig_frames = []
                         pred_frames = []
                         comp_frames = []
-                        for f in range(video_len-15, video_len-10):
+                        # for f in range(video_len-10-win_len, video_len-10):
+                        for f in range(win_len//2+1, win_len//2 + 1 + win_len):
                             frames_win = frames[:, f:f+win_len]
                             masks_win = masks[:, f:f+win_len]
                             frames_win, masks_win = frames_win.to(device), masks_win.to(device)
@@ -428,15 +429,17 @@ class Trainer():
                             comp_img = frames_win*(1.-masks_win) + masks_win*pred_img
                             comp_img = comp_img.view(b, t, c, h, w)
                             comp_img = (comp_img + 1) / 2
+
+                            print(win_len, t)
                             
                             orig_frames.append(((frames_win.view(b,t,c,h,w)[0,win_len//2+1,...]+1)/2).cpu().numpy())
                             pred_frames.append(((pred_img.view(b,t,c,h,w)[0,win_len//2+1,...]+1)/2).cpu().numpy())
                             comp_frames.append(comp_img.view(b,t,c,h,w)[0,win_len//2+1,...].cpu().numpy())
 
                         grid = make_grid(torch.cat([
-                            torch.tensor(orig_frames), 
-                            torch.tensor(pred_frames), 
-                            torch.tensor(comp_frames)], dim=0), nrow=5)
+                            torch.tensor(np.array(orig_frames)), 
+                            torch.tensor(np.array(pred_frames)), 
+                            torch.tensor(np.array(comp_frames))], dim=0), nrow=win_len)
                         save_dir = os.path.join(self.config['save_dir'], 'control_images')
                         os.makedirs(save_dir, exist_ok=True)
                         save_image(grid, os.path.join(save_dir, f'{video_name}_{self.iteration}.png'))
