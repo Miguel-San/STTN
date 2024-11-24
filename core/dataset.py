@@ -41,7 +41,7 @@ class Dataset(torch.utils.data.Dataset):
     def __len__(self):
         # return len(self.video_names)
         video_name = self.video_names[0]
-        return self.video_dict[video_name]-self.sample_length-(self.stride-1)*(self.sample_length-1)
+        return self.video_dict[video_name]-(self.sample_length-1)-(self.stride-1)*(self.sample_length-1)
     
     def video_length(self):
         return self.video_dict[self.video_names[0]]
@@ -101,7 +101,6 @@ def get_ref_index(length, sample_length, stride, pivot=None):
     if pivot is None:
         pivot = random.randint(0, length-sample_length-(stride-1)*(sample_length-1))
     ref_index = [pivot+i*stride for i in range(sample_length)]
-    print(ref_index)
     return ref_index
 
 

@@ -57,7 +57,8 @@ class Trainer():
             sampler=self.train_sampler)
         
         # Test dataset
-        self.test_dataset = Dataset(config['data_loader'], split='test', debug=debug)
+        #TODO: CAMBIAR ESTO: test -> test_5050
+        self.test_dataset = Dataset(config['data_loader'], split='test_5050', debug=debug)
         self.control_imgs_loader = DataLoader(
             Subset(self.test_dataset, indices=[0]),
             batch_size=1,
@@ -68,7 +69,7 @@ class Trainer():
         self.test_loader = DataLoader(
             self.test_dataset,
             batch_size=self.train_args['batch_size'] // config['world_size'],
-            shuffle=False,
+            shuffle=True,
             num_workers=self.train_args['num_workers'],
             sampler=None
         )
@@ -236,6 +237,7 @@ class Trainer():
         device = self.config['device']
 
         while self.iteration <= self.train_args['iterations']:
+            print("************ EPOCH {} ************".format(self.epoch))
             for frames, masks in self.train_loader:
                 self.adjust_learning_rate()
                 self.iteration += 1
@@ -474,8 +476,6 @@ class Trainer():
                             #     orig_frames.append(((frames_win.view(b,t,c,h,w)[0,win_len//2+1,...]+1)/2).cpu().numpy())
                             #     pred_frames.append(((pred_img.view(b,t,c,h,w)[0,win_len//2+1,...]+1)/2).cpu().numpy())
                             #     comp_frames.append(comp_img.view(b,t,c,h,w)[0,win_len//2+1,...].cpu().numpy())
-
-                            print(torch.tensor(np.array(orig_frames)).shape, torch.tensor(np.array(pred_frames)).shape, torch.tensor(np.array(comp_frames)).shape)
 
                             grid = make_grid(torch.cat([
                                 torch.tensor(np.array(orig_frames)[0]), 

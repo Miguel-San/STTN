@@ -10,8 +10,9 @@ from PIL import Image
 
 import torch
 from torch.utils.data import DataLoader
+from torchvision.utils import make_grid, save_image
 
-from core.dataset import Dataset, TestDataset
+from core.dataset import Dataset
 from joblib import Parallel, delayed
 
 class Tester():
@@ -42,9 +43,11 @@ class Tester():
         comp_windows = {v_name:[] for v_name in self.dataset.video_names}
         video_len = {}
 
+        print(len(self.test_loader.dataset))
+
         print("Predicting...")
         self.netG.eval()
-        for i, (frames, masks) in enumerate(self.test_loader):
+        for i, (frames, masks) in enumerate(tqdm(self.test_loader)):
             video_name = self.dataset.video_names[0]
             video_len[video_name] = self.dataset.video_length()
 
@@ -81,24 +84,44 @@ class Tester():
             #         comp_frames[video_name].append(comp_img.cpu().numpy())
             #         # comp_frames[video_name].append(pred_img.view(b,t,c,h,w).cpu().numpy())
 
+        print(len(comp_windows[video_name]), comp_windows[video_name][0].shape)
+
         print("Promediating each frame for every window...")
         # Promediate each frame with corresponding generated frames in each window
         comp_frames = {}
         comp_mean_frames = {}
-        for video_name, frames in comp_windows.items():
-            print(len(comp_windows[video_name]), comp_windows[video_name][0].shape)
+        for video_name, windows in comp_windows.items():
+            print(len(windows), windows[0].shape)
 
             comp_frames[video_name] = [[] for _ in range(video_len[video_name])]
-            comp_mean_frames[video_name] = np.empty((video_len[video_name], *comp_windows[video_name][0].shape[-int(win_len/2):]))
+            comp_mean_frames[video_name] = np.empty((video_len[video_name], *windows[0].shape[-int(win_len/2):]))
             # Loop iterating through all windows
-            for i in tqdm(len(comp_windows[video_name]), desc=video_name):
+            print("Loop iterating through all windows...")
+            for i in tqdm(range(len(windows)), desc=video_name):
                 # Loop iterating through all frames in each window
-                for j in range(len(comp_windows[video_name][i])):
-                    comp_frames[video_name][i+j*stride].append(comp_windows[video_name][i][j])
+                for j in range(windows[i].shape[1]):
+                    # print(i, j, i+j*stride)
+
+                    # grid = make_grid(torch.tensor(windows[i][0,...]), nrow=1, normalize=True)
+                    # save_image(grid, f"grid_{i}_{j}.png")
+                    # import sys
+                    # sys.exit()
+
+                    comp_frames[video_name][i+j*stride].append(windows[i][0,j,...])
 
             # Promediate each frame with corresponding generated frames in each window
+            print("Promediating each frame...")
             for i in tqdm(range(video_len[video_name]), desc=video_name):
-                comp_mean_frames[video_name][i] = np.mean(comp_frames[video_name][i])
+                comp_mean_frames[video_name][i] = np.mean(comp_frames[video_name][i], axis=0)
+
+                # print(len(comp_frames[video_name][i]), comp_frames[video_name][i][0].shape)
+                # grid = make_grid([torch.tensor(f) for f in comp_frames[video_name][i]], nrow=1, normalize=True)
+                # save_image(grid, f"grid.png")
+                # save_image(torch.tensor(comp_mean_frames[video_name][i]), f"comp_mean_frames_{i}.png")
+                # import sys
+                # sys.exit()
+
+                # print(comp_mean_frames[video_name][i].shape)
 
         # comp_mean_frames = {}
         # for video_name, frames in comp_windows.items():
