@@ -67,14 +67,15 @@ class InpaintGenerator(BaseNetwork):
         super(InpaintGenerator, self).__init__()
         channel = 256
         stack_num = 8
-        patchsize = [(108, 60), (36, 20), (18, 10), (9, 5)]
+        # patchsize = [(108, 60), (36, 20), (18, 10), (9, 5)]
+        patchsize = [(128, 88), (64, 44), (32, 22), (16, 11)]
         blocks = []
         for _ in range(stack_num):
             blocks.append(TransformerBlock(patchsize, hidden=channel))
         self.transformer = nn.Sequential(*blocks)
 
         self.encoder = nn.Sequential(
-            nn.Conv2d(3, 64, kernel_size=3, stride=2, padding=1),
+            nn.Conv2d(1, 64, kernel_size=3, stride=2, padding=1),
             nn.LeakyReLU(0.2, inplace=True),
             nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1),
             nn.LeakyReLU(0.2, inplace=True),
@@ -92,7 +93,7 @@ class InpaintGenerator(BaseNetwork):
             nn.LeakyReLU(0.2, inplace=True),
             deconv(64, 64, kernel_size=3, padding=1),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Conv2d(64, 3, kernel_size=3, stride=1, padding=1)
+            nn.Conv2d(64, 1, kernel_size=3, stride=1, padding=1)
         )
 
         if init_weights:
@@ -210,8 +211,8 @@ class MultiHeadedAttention(nn.Module):
             y, attn = self.attention(query, key, value, mm)
 
             # return attention value for visualization 
-            # here we return the attention value of patchsize=18 
-            if width == 18:
+            # here we return the attention value of patchsize=32 
+            if width == 16:
                 select_attn = attn.view(t, out_h*out_w, t, out_h, out_w)[0]
                 # mm, [b, thw, thw]
                 select_mm = mm[0].view(t*out_h*out_w, t, out_h, out_w)[0]
