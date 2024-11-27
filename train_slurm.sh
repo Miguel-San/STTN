@@ -22,11 +22,14 @@ conda activate AIRML
 ##python train.py --config configs/twin_jet_old_scaled_dev.json --model sttn
 ##python test_custom.py --config configs/twin_jet_old_scaled_dev.json --model sttn --ckpt 4500 --ds_name full_ds_1e4
 
-python train.py --config configs/scheduled_runs/w5_s5.json --model sttn
-python train.py --config configs/scheduled_runs/w5_s10.json --model sttn
-python train.py --config configs/scheduled_runs/w11_s5.json --model sttn
-python train.py --config configs/scheduled_runs/w11_s10.json --model sttn
-python train.py --config configs/scheduled_runs/w21_s5.json --model sttn
-python train.py --config configs/scheduled_runs/w21_s10.json --model sttn
+# python train.py --config configs/scheduled_runs/w5_s5.json --model sttn
+# python train.py --config configs/scheduled_runs/w5_s10.json --model sttn
+# python train.py --config configs/scheduled_runs/w11_s5.json --model sttn
+# python train.py --config configs/scheduled_runs/w11_s10.json --model sttn
+# python train.py --config configs/scheduled_runs/w21_s5.json --model sttn
+# python train.py --config configs/scheduled_runs/w21_s10.json --model sttn
+
+python train.py --config configs/twin_jet_vis_cropped.json --model vis
+python test_custom.py --config configs/twin_jet_vis_cropped.json --model vis --ckpt 10000 --ds_name full_ds_1e4
 
 date

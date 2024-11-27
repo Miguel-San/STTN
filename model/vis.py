@@ -65,35 +65,48 @@ class BaseNetwork(nn.Module):
 class InpaintGenerator(BaseNetwork):
     def __init__(self, init_weights=True):  # 1046
         super(InpaintGenerator, self).__init__()
-        channel = 256
-        stack_num = 8
+        #TODO:MODIFICAR channel y patchsize
+        channel = 32*3
+        stack_num = 1
         # patchsize = [(108, 60), (36, 20), (18, 10), (9, 5)]
-        patchsize = [(128, 88), (64, 44), (32, 22), (16, 11)]
+        # patchsize = [(128, 88), (64, 44), (32, 22), (16, 11)]
+        # patchsize = [(128, 128), (64, 64), (32, 32), (16, 16)]
+        patchsize = [(128,128), (64,64), (32,32), (16,16), (8,8), (4,4)]
+        # patchsize = [(64, 64), (16,16), (8,8), (4,4)]
         blocks = []
         for _ in range(stack_num):
             blocks.append(TransformerBlock(patchsize, hidden=channel))
         self.transformer = nn.Sequential(*blocks)
 
+        # self.encoder = nn.Sequential(
+        #     nn.Conv2d(1, 64, kernel_size=3, stride=2, padding=1),
+        #     nn.LeakyReLU(0.2, inplace=True),
+        #     nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1),
+        #     nn.LeakyReLU(0.2, inplace=True),
+        #     nn.Conv2d(64, 128, kernel_size=3, stride=2, padding=1),
+        #     nn.LeakyReLU(0.2, inplace=True),
+        #     nn.Conv2d(128, channel, kernel_size=3, stride=1, padding=1),
+        #     nn.LeakyReLU(0.2, inplace=True),
+        # )
+
         self.encoder = nn.Sequential(
-            nn.Conv2d(1, 64, kernel_size=3, stride=2, padding=1),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.Conv2d(64, 128, kernel_size=3, stride=2, padding=1),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.Conv2d(128, channel, kernel_size=3, stride=1, padding=1),
+            nn.Conv2d(1, channel, kernel_size=3, stride=1, padding=1),
             nn.LeakyReLU(0.2, inplace=True),
         )
 
         # decoder: decode image from features
+        # self.decoder = nn.Sequential(
+        #     deconv(channel, 128, kernel_size=3, padding=1),
+        #     nn.LeakyReLU(0.2, inplace=True),
+        #     nn.Conv2d(128, 64, kernel_size=3, stride=1, padding=1),
+        #     nn.LeakyReLU(0.2, inplace=True),
+        #     deconv(64, 64, kernel_size=3, padding=1),
+        #     nn.LeakyReLU(0.2, inplace=True),
+        #     nn.Conv2d(64, 1, kernel_size=3, stride=1, padding=1)
+        # )
+
         self.decoder = nn.Sequential(
-            deconv(channel, 128, kernel_size=3, padding=1),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.Conv2d(128, 64, kernel_size=3, stride=1, padding=1),
-            nn.LeakyReLU(0.2, inplace=True),
-            deconv(64, 64, kernel_size=3, padding=1),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.Conv2d(64, 1, kernel_size=3, stride=1, padding=1)
+            nn.Conv2d(channel, 1, kernel_size=3, stride=1, padding=1)
         )
 
         if init_weights:
@@ -105,7 +118,7 @@ class InpaintGenerator(BaseNetwork):
         masks = masks.view(b*t, 1, h, w)
         enc_feat = self.encoder(masked_frames.view(b*t, c, h, w))
         _, c, h, w = enc_feat.size()
-        masks = F.interpolate(masks, scale_factor=1.0/4)
+        # masks = F.interpolate(masks, scale_factor=1.0/4)
         enc_feat = self.transformer(
             {'x': enc_feat, 'm': masks, 'b': b, 'c': c})['x']
         output = self.decoder(enc_feat)
@@ -115,7 +128,7 @@ class InpaintGenerator(BaseNetwork):
     def infer(self, feat, masks):
         t, c, h, w = masks.size()
         masks = masks.view(t, c, h, w)
-        masks = F.interpolate(masks, scale_factor=1.0/4)
+        # masks = F.interpolate(masks, scale_factor=1.0/4)
         t, c, _, _ = feat.size()
         output = self.transformer({'x': feat, 'm': masks, 'b': 1, 'c': c})
         enc_feat = output['x']
@@ -181,6 +194,10 @@ class MultiHeadedAttention(nn.Module):
         _query = self.query_embedding(x)
         _key = self.key_embedding(x)
         _value = self.value_embedding(x)
+
+        attn_maps = {}
+        mm_maps = {}
+
         for (width, height), query, key, value in zip(self.patchsize,
                                                       torch.chunk(_query, len(self.patchsize), dim=1), torch.chunk(
                                                           _key, len(self.patchsize), dim=1),
@@ -191,6 +208,8 @@ class MultiHeadedAttention(nn.Module):
                 b,  t*out_h*out_w, height*width)
             mm = (mm.mean(-1) > 0.5).unsqueeze(1).repeat(1, t*out_h*out_w, 1)
             # 1) embedding and reshape
+            # print(query.shape)
+            # print(b, t, d_k, out_h, height, out_w, width)
             query = query.view(b, t, d_k, out_h, height, out_w, width)
             query = query.permute(0, 1, 3, 5, 2, 4, 6).contiguous().view(
                 b,  t*out_h*out_w, d_k*height*width)
@@ -212,10 +231,13 @@ class MultiHeadedAttention(nn.Module):
 
             # return attention value for visualization 
             # here we return the attention value of patchsize=32 
-            if width == 16:
-                select_attn = attn.view(t, out_h*out_w, t, out_h, out_w)[0]
-                # mm, [b, thw, thw]
-                select_mm = mm[0].view(t*out_h*out_w, t, out_h, out_w)[0]
+            # if width == 32:
+            #     select_attn = attn.view(t, out_h*out_w, t, out_h, out_w)[0]
+            #     # mm, [b, thw, thw]
+            #     select_mm = mm[0].view(t*out_h*out_w, t, out_h, out_w)[0]
+
+            attn_maps[width] = attn.view(t, out_h*out_w, t, out_h, out_w)
+            mm_maps[width] = mm.view(t, out_h*out_w, t, out_h, out_w)
 
             # 3) "Concat" using a view and apply a final linear.
             y = y.view(b, t, out_h, out_w, d_k, height, width)
@@ -223,7 +245,8 @@ class MultiHeadedAttention(nn.Module):
             output.append(y)
         output = torch.cat(output, 1)
         x = self.output_linear(output)
-        return x, select_attn, select_mm
+        # return x, select_attn, select_mm
+        return x, attn_maps, mm_maps
 
 
 # Standard 2 layerd FFN of transformer

@@ -104,6 +104,10 @@ class Trainer():
             self.netD.parameters(), 
             lr=config['trainer']['lr'],
             betas=(self.config['trainer']['beta1'], self.config['trainer']['beta2']))
+        
+        self.netG.print_network()
+        print(self.netG)
+
         self.load()
 
         if config['distributed']:
