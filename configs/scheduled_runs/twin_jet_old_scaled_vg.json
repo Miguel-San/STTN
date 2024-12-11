@@ -1,7 +1,7 @@
 {
     "seed": 2020,
-    "save_dir": "release_models/win_str_study/1ch_w21_s10/",
-    "results_dir": "outputs/win_str_study/1ch_w21_s10/",
+    "save_dir": "release_models/win_str_study/vg_w21/",
+    "results_dir": "outputs/win_str_study/vg_w21/",
     "global_rank" : 0,
     "local_rank" : 0,
     "device_int" : 3,
@@ -11,7 +11,7 @@
         "w": 512,
         "h": 352,
         "sample_length": 21,
-        "stride" : 10,
+        "stride" : 1,
         "img_ext": "png"
     },
     "losses": {
@@ -20,7 +20,7 @@
         "adversarial_weight": 0.01,
         "GAN_LOSS": "hinge",
 
-        "vg_weight" : 0,
+        "vg_weight" : 1,
         "vg_coords" : [[30, 50], [295, 315]]
     },
     "trainer": {

@@ -351,8 +351,8 @@ class Trainer():
                             for frames, masks in self.test_loader:
                                 testing_iter += 1
 
-                                gen_loss = 0
-                                dis_loss = 0
+                                gen_loss_test = 0
+                                dis_loss_test = 0
 
                                 frames, masks = frames.to(device), masks.to(device)
                                 b, t, c, h, w = frames.size()
@@ -364,22 +364,22 @@ class Trainer():
 
                                 real_vid_feat = self.netD(frames)
                                 fake_vid_feat = self.netD(comp_img.detach())
-                                dis_real_loss = self.adversarial_loss(real_vid_feat, True, True)
-                                dis_fake_loss = self.adversarial_loss(fake_vid_feat, False, True)
-                                dis_loss += (dis_real_loss + dis_fake_loss) / 2
+                                dis_real_loss_test = self.adversarial_loss(real_vid_feat, True, True)
+                                dis_fake_loss_test = self.adversarial_loss(fake_vid_feat, False, True)
+                                dis_loss_test += (dis_real_loss_test + dis_fake_loss_test) / 2
 
                                 gen_vid_feat = self.netD(comp_img)
-                                gan_loss = self.adversarial_loss(gen_vid_feat, True, False)
-                                gan_loss = gan_loss * self.config['losses']['adversarial_weight']
-                                gen_loss += gan_loss
+                                gan_loss_test = self.adversarial_loss(gen_vid_feat, True, False)
+                                gan_loss_test = gan_loss_test * self.config['losses']['adversarial_weight']
+                                gen_loss_test += gan_loss_test
 
-                                hole_loss = self.l1_loss(pred_img*masks, frames*masks)
-                                hole_loss = hole_loss / torch.mean(masks) * self.config['losses']['hole_weight']
-                                gen_loss += hole_loss
+                                hole_loss_test = self.l1_loss(pred_img*masks, frames*masks)
+                                hole_loss_test = hole_loss_test / torch.mean(masks) * self.config['losses']['hole_weight']
+                                gen_loss_test += hole_loss_test
 
-                                valid_loss = self.l1_loss(pred_img*(1-masks), frames*(1-masks))
-                                valid_loss = valid_loss / torch.mean(1-masks) * self.config['losses']['valid_weight']
-                                gen_loss += valid_loss 
+                                valid_loss_test = self.l1_loss(pred_img*(1-masks), frames*(1-masks))
+                                valid_loss_test = valid_loss_test / torch.mean(1-masks) * self.config['losses']['valid_weight']
+                                gen_loss_test += valid_loss_test 
 
                                 # Visibility Graph Regularizer
                                 if self.config['losses']['vg_weight'] > 0:
@@ -396,18 +396,18 @@ class Trainer():
                                             vg_orig = VGRegularizer()
                                             vg_orig.build(orig_series.flatten())
 
-                                            vg_loss = self.l1_loss(vg_pred.G, vg_orig.G) * self.config['losses']['vg_weight']
+                                            vg_loss_test = self.l1_loss(vg_pred.G, vg_orig.G) * self.config['losses']['vg_weight']
                                             vg_count += 1
-                                    gen_loss += vg_loss/vg_count
+                                    gen_loss_test += vg_loss_test/vg_count
                                 else:
-                                    vg_loss = torch.tensor([0]).to(device)
+                                    vg_loss_test = torch.tensor([0]).to(device)
 
-                                dis_loss_batch.append(dis_loss.item())
-                                gan_loss_batch.append(gan_loss.item())
-                                hole_loss_batch.append(hole_loss.item())
-                                valid_loss_batch.append(valid_loss.item())
-                                gen_loss_batch.append(gen_loss.item())
-                                vg_loss_batch.append(vg_loss.item())
+                                dis_loss_batch.append(dis_loss_test.item())
+                                gan_loss_batch.append(gan_loss_test.item())
+                                hole_loss_batch.append(hole_loss_test.item())
+                                valid_loss_batch.append(valid_loss_test.item())
+                                gen_loss_batch.append(gen_loss_test.item())
+                                vg_loss_batch.append(vg_loss_test.item())
 
                                 if self.test_iterations is not None:
                                     if testing_iter > self.test_iterations:
@@ -433,6 +433,9 @@ class Trainer():
                             "Training" : v_tr,
                             "Validation" : v_val
                         }, self.iteration)
+
+                    self.netD.train()
+                    self.netG.train()
 
                 # Control images            
                 if self.iteration % self.train_args['valid_freq'] == 0:
@@ -484,6 +487,7 @@ class Trainer():
                             save_dir = os.path.join(self.config['save_dir'], 'control_images')
                             os.makedirs(save_dir, exist_ok=True)
                             save_image(grid, os.path.join(save_dir, f'{video_name}_{self.iteration}.png'))
+
                     self.netG.train()
                             
 

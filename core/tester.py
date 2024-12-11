@@ -84,17 +84,18 @@ class Tester():
             #         comp_frames[video_name].append(comp_img.cpu().numpy())
             #         # comp_frames[video_name].append(pred_img.view(b,t,c,h,w).cpu().numpy())
 
-        print(len(comp_windows[video_name]), comp_windows[video_name][0].shape)
+        # print(len(comp_windows[video_name]), comp_windows[video_name][0].shape)
 
         print("Promediating each frame for every window...")
         # Promediate each frame with corresponding generated frames in each window
         comp_frames = {}
         comp_mean_frames = {}
         for video_name, windows in comp_windows.items():
-            print(len(windows), windows[0].shape)
+            # print(len(windows), windows[0].shape)
 
             comp_frames[video_name] = [[] for _ in range(video_len[video_name])]
-            comp_mean_frames[video_name] = np.empty((video_len[video_name], *windows[0].shape[-int(win_len/2):]))
+            comp_mean_frames[video_name] = [None for _ in range(video_len[video_name])]
+            # comp_mean_frames[video_name] = np.empty((video_len[video_name], *windows[0].shape[-int(win_len/2):]))
             # Loop iterating through all windows
             print("Loop iterating through all windows...")
             for i in tqdm(range(len(windows)), desc=video_name):
@@ -109,10 +110,24 @@ class Tester():
 
                     comp_frames[video_name][i+j*stride].append(windows[i][0,j,...])
 
+                    # print("WINDOW SHAPE: ", windows[i].shape)
+                    # print("FRAME SHAPE: ", windows[i][0,j,...].shape)
+                    # import sys
+                    # sys.exit()
+
             # Promediate each frame with corresponding generated frames in each window
             print("Promediating each frame...")
-            for i in tqdm(range(video_len[video_name]), desc=video_name):
+            for i in tqdm(range(video_len[video_name]), desc=video_name, disable=True):
+                # import sys
+                # sys.exit()
                 comp_mean_frames[video_name][i] = np.mean(comp_frames[video_name][i], axis=0)
+
+                # print("**********************************")
+                # print("FRAME %i"%i)
+                # print("LISTA DE FRAMES: ", len(comp_frames[video_name][i]))
+                # print("FRAME SHAPEs: ", [comp_frames[video_name][i][j].shape for j in range(len(comp_frames[video_name][i]))])
+                # print("MEAN FRAME SHAPE: ", comp_mean_frames[video_name][i].shape)
+                # print("**********************************")
 
                 # print(len(comp_frames[video_name][i]), comp_frames[video_name][i][0].shape)
                 # grid = make_grid([torch.tensor(f) for f in comp_frames[video_name][i]], nrow=1, normalize=True)

@@ -1,17 +1,17 @@
 {
     "seed": 2020,
-    "save_dir": "release_models/win_str_study/1ch_w21_s10/",
-    "results_dir": "outputs/win_str_study/1ch_w21_s10/",
+    "save_dir": "release_models/consistency_1b_lr1E-5/release_model_c2/",
+    "results_dir": "outputs/consistency_1b_lr1E-5/output_c2/",
     "global_rank" : 0,
     "local_rank" : 0,
-    "device_int" : 3,
+    "device_int" : 0,
     "data_loader": {
         "name": "twin_jet_old_scaled",
         "data_root": "datasets/",
         "w": 512,
         "h": 352,
-        "sample_length": 21,
-        "stride" : 10,
+        "sample_length": 5,
+        "stride" : 1,
         "img_ext": "png"
     },
     "losses": {
@@ -35,7 +35,7 @@
         "log_freq": 200,
         "save_freq": 200,
         "valid_freq": 200, 
-        "iterations" :50000,
+        "iterations" :60000,
         "test_iterations" : 10,
         "niter": 30e4,
         "niter_steady": 30e4
