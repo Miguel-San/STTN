@@ -104,6 +104,12 @@ class Trainer():
             self.netD.parameters(), 
             lr=config['trainer']['lr'],
             betas=(self.config['trainer']['beta1'], self.config['trainer']['beta2']))
+        
+        print("****************** TRAINABLE PARAMETER COUNT ***********************")
+        print(f"Generator: {sum(p.numel() for p in self.netG.parameters() if p.requires_grad)}")
+        print(f"Discriminator: {sum(p.numel() for p in self.netD.parameters() if p.requires_grad)}")
+        print("*********************************************************************")
+
         self.load()
 
         if config['distributed']:
