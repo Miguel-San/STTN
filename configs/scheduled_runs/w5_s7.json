@@ -1,17 +1,17 @@
 {
     "seed": 2020,
-    "save_dir": "release_models/win_str_study/vg_w11_s1/",
-    "results_dir": "outputs/win_str_study/vg_w11_s1/",
+    "save_dir": "release_models/win_str_study/1ch_w5_s7/",
+    "results_dir": "outputs/win_str_study/1ch_w5_s7/",
     "global_rank" : 0,
     "local_rank" : 0,
-    "device_int" : 2,
+    "device_int" : 3,
     "data_loader": {
         "name": "twin_jet_old_scaled",
         "data_root": "datasets/",
         "w": 512,
         "h": 352,
-        "sample_length": 11,
-        "stride" : 1,
+        "sample_length": 5,
+        "stride" : 7,
         "img_ext": "png"
     },
     "losses": {
@@ -20,7 +20,7 @@
         "adversarial_weight": 0.01,
         "GAN_LOSS": "hinge",
 
-        "vg_weight" : 1,
+        "vg_weight" : 0,
         "vg_coords" : [[30, 50], [295, 315]]
     },
     "trainer": {
@@ -35,7 +35,7 @@
         "log_freq": 200,
         "save_freq": 200,
         "valid_freq": 200, 
-        "iterations" :30000,
+        "iterations" :50000,
         "test_iterations" : 10,
         "niter": 30e4,
         "niter_steady": 30e4

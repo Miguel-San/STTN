@@ -4,7 +4,7 @@
     "results_dir": "outputs/win_str_study/1ch_w5_s10/",
     "global_rank" : 0,
     "local_rank" : 0,
-    "device_int" : 3,
+    "device_int" : 0,
     "data_loader": {
         "name": "twin_jet_old_scaled",
         "data_root": "datasets/",

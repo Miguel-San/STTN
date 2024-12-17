@@ -1,7 +1,7 @@
 {
     "seed": 2020,
-    "save_dir": "release_models/win_str_study/vg_w11_s1/",
-    "results_dir": "outputs/win_str_study/vg_w11_s1/",
+    "save_dir": "release_models/win_str_study/vg_w5_s1/",
+    "results_dir": "outputs/win_str_study/vg_w5_s1/",
     "global_rank" : 0,
     "local_rank" : 0,
     "device_int" : 2,
@@ -10,8 +10,8 @@
         "data_root": "datasets/",
         "w": 512,
         "h": 352,
-        "sample_length": 11,
-        "stride" : 1,
+        "sample_length": 5,
+        "stride" : 5,
         "img_ext": "png"
     },
     "losses": {

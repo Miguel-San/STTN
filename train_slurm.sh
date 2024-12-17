@@ -9,10 +9,10 @@
 ##SBATCH --cpus-per-task=1
 #SBATCH --mem=20G
 #SBATCH --partition=gpu
-#SBATCH --time=480:00:00
+#SBATCH --time=1000:00:00
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=miguel.sanchez.dominguez@upm.es
-#SBATCH --output=slurm_STTN_sch.out
+#SBATCH --output=slurm_STTN_sch2.out
 ##------------------------ End job description ------------------------
 
 date
@@ -22,14 +22,27 @@ conda activate AIRML
 ##python train.py --config configs/twin_jet_old_scaled_dev.json --model sttn
 ##python test_custom.py --config configs/twin_jet_old_scaled_dev.json --model sttn --ckpt 4500 --ds_name full_ds_1e4
 
-python train.py --config configs/scheduled_runs/w5_s5.json --model sttn
-python train.py --config configs/scheduled_runs/w5_s10.json --model sttn
-python train.py --config configs/scheduled_runs/w11_s1.json --model sttn
-python train.py --config configs/scheduled_runs/w11_s5.json --model sttn
-python train.py --config configs/scheduled_runs/w11_s10.json --model sttn
-python train.py --config configs/scheduled_runs/w21_s1.json --model sttn
-python train.py --config configs/scheduled_runs/w21_s5.json --model sttn
-python train.py --config configs/scheduled_runs/w21_s10.json --model sttn
+# python train.py --config configs/scheduled_runs/w5_s2.json --model sttn
+# python train.py --config configs/scheduled_runs/w5_s3.json --model sttn
+# python train.py --config configs/scheduled_runs/w5_s5.json --model sttn
+python train.py --config configs/scheduled_runs/w5_s6.json --model sttn
+# python train.py --config configs/scheduled_runs/w5_s7.json --model sttn
+# python train.py --config configs/scheduled_runs/w5_s8.json --model sttn
+# python train.py --config configs/scheduled_runs/w5_s10.json --model sttn
+# python train.py --config configs/scheduled_runs/w11_s1.json --model sttn
+# python train.py --config configs/scheduled_runs/w11_s5.json --model sttn
+# python train.py --config configs/scheduled_runs/w11_s10.json --model sttn
+# python train.py --config configs/scheduled_runs/w21_s1.json --model sttn
+# python train.py --config configs/scheduled_runs/w21_s5.json --model sttn
+# python train.py --config configs/scheduled_runs/w21_s10.json --model sttn
+# python train.py --config configs/scheduled_runs/w31_s1.json --model sttn
+# python train.py --config configs/scheduled_runs/w41_s1.json --model sttn
+# python train.py --config configs/scheduled_runs/w51_s1.json --model sttn
+# python train.py --config configs/scheduled_runs/w5_s1_vg.json --model sttn
+# python train.py --config configs/scheduled_runs/w5_s5_vg.json --model sttn
+# python train.py --config configs/scheduled_runs/w5_s10_vg.json --model sttn
+# python train.py --config configs/scheduled_runs/w11_s1_vg.json --model sttn
+# python train.py --config configs/scheduled_runs/w21_s1_vg.json --model sttn
 
 # python train.py --config configs/consistency_runs/twin_jet_old_scaled_c0.json --model sttn
 # python train.py --config configs/consistency_runs/twin_jet_old_scaled_c1.json --model sttn
@@ -115,12 +128,17 @@ python train.py --config configs/scheduled_runs/w21_s10.json --model sttn
 # python test_custom.py --config configs/scheduled_runs/twin_jet_old_scaled.json --model sttn --ckpt 4000 --ds_name full_ds_1e4
 # python test_custom.py --config configs/scheduled_runs/twin_jet_old_scaled_vg.json --model sttn --ckpt 3500 --ds_name full_ds_1e4
 
+# python test_custom.py --config configs/scheduled_runs/w5_s2.json --model sttn --ckpt 25000 --ds_name full_ds_1e4
+# python test_custom.py --config configs/scheduled_runs/w5_s3.json --model sttn --ckpt 25000 --ds_name full_ds_1e4
 # python test_custom.py --config configs/scheduled_runs/w5_s5.json --model sttn --ckpt 13000 --ds_name full_ds_1e4
+# python test_custom.py --config configs/scheduled_runs/w5_s7.json --model sttn --ckpt 12000 --ds_name full_ds_1e4
+# python test_custom.py --config configs/scheduled_runs/w5_s8.json --model sttn --ckpt 11400 --ds_name full_ds_1e4
 # python test_custom.py --config configs/scheduled_runs/w5_s10.json --model sttn --ckpt 10000 --ds_name full_ds_1e4
 # python test_custom.py --config configs/scheduled_runs/w11_s1.json --model sttn --ckpt 25000 --ds_name full_ds_1e4
 # python test_custom.py --config configs/scheduled_runs/w11_s5.json --model sttn --ckpt 7600 --ds_name full_ds_1e4
 # python test_custom.py --config configs/scheduled_runs/w11_s10.json --model sttn --ckpt 7600 --ds_name full_ds_1e4
-# python test_custom.py --config configs/scheduled_runs/w21_s5.json --model sttn --ckpt 1000 --ds_name full_ds_1e4
-# python test_custom.py --config configs/scheduled_runs/w21_s10.json --model sttn --ckpt 3500 --ds_name full_ds_1e4
+# python test_custom.py --config configs/scheduled_runs/w21_s1.json --model sttn --ckpt 20000 --ds_name full_ds_1e4
+# python test_custom.py --config configs/scheduled_runs/w21_s5.json --model sttn --ckpt 7600 --ds_name full_ds_1e4
+# python test_custom.py --config configs/scheduled_runs/w21_s10.json --model sttn --ckpt 7600 --ds_name full_ds_1e4
 
 date
