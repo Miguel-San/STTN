@@ -52,8 +52,8 @@ class Trainer():
         self.train_loader = DataLoader(
             self.train_dataset,
             batch_size=self.train_args['batch_size'] // config['world_size'],
-            # shuffle=(self.train_sampler is None), 
-            shuffle=False,
+            shuffle=(self.train_sampler is None), 
+            # shuffle=False,
             num_workers=self.train_args['num_workers'],
             sampler=self.train_sampler)
         
@@ -70,8 +70,8 @@ class Trainer():
         self.test_loader = DataLoader(
             self.test_dataset,
             batch_size=self.train_args['batch_size'] // config['world_size'],
-            # shuffle=True,
-            shuffle=False,
+            shuffle=True,
+            # shuffle=False,
             num_workers=self.train_args['num_workers'],
             sampler=None
         )
