@@ -25,6 +25,9 @@ class Dataset(torch.utils.data.Dataset):
         self.split = split
         self.sample_length = args['sample_length']
         self.stride = args["stride"]
+        self.noverlap = args["noverlap"]
+        if self.noverlap == "auto":
+            self.noverlap = int(np.ceil(self.sample_length/2))
         self.size = self.w, self.h = (args['w'], args['h'])
         self.img_ext = args['img_ext']
 
@@ -41,12 +44,20 @@ class Dataset(torch.utils.data.Dataset):
     def __len__(self):
         # return len(self.video_names)
         video_name = self.video_names[0]
-        return self.video_dict[video_name]-(self.sample_length-1)-(self.stride-1)*(self.sample_length-1)
+        # return self.video_dict[video_name]-(self.sample_length-1)-(self.stride-1)*(self.sample_length-1)
+        n_snapshots = self.video_dict[video_name][1] - self.video_dict[video_name][0]
+        N_striding = np.ceil(n_snapshots/self.stride) # Number of snapshots after striding
+        N_windows = int(np.floor((N_striding - self.noverlap)/(self.sample_length - self.noverlap))) # Number of (actual) windows
+        return N_windows
     
     def video_length(self):
-        return self.video_dict[self.video_names[0]]
+        # return self.video_dict[self.video_names[0]]
+        return self.video_dict[self.video_names[0]][1] - self.video_dict[self.video_names[0]][0]
 
-    def __getitem__(self, index):
+    def __getitem__(self, windex):
+        # TODO: IMPLEMENTAR AQUÍ EL OVERLAP DE VENTANAS. TE LLEGA EL ÍNDICE DE LA VENTANA (windex), Y YA A PARTIR DE AHÍ MIRAS EL ÍNDICE DEL PRIMER FRAME (index)
+        index = windex*(self.sample_length - self.noverlap)
+        index += (self.stride-1)*index
         try:
             item = self.load_item(index)
         except:
@@ -55,6 +66,9 @@ class Dataset(torch.utils.data.Dataset):
         return item
 
     def load_item(self, index):
+        # index ES EL ÍNDICE DEL PRIMER FRAME DEL SUBSET. SE TRASLADA AL ÍNDICE DE TODO EL DATASET
+        index = index + self.video_dict[self.video_names[0]][0]
+
         video_name = self.video_names[0]
         # all_frames = [f"{str(i).zfill(5)}."+self.img_ext for i in range(self.video_dict[video_name])]
         # all_masks = create_random_shape_with_random_motion(
@@ -86,6 +100,9 @@ class Dataset(torch.utils.data.Dataset):
         # To tensors
         frame_tensors = self._to_tensors(frames)*2.0 - 1.0
         mask_tensors = self._to_tensors(masks)
+
+        print(f"Loading {self.split}: {ref_index}")
+
         return frame_tensors, mask_tensors
 
 
