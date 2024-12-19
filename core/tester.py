@@ -12,7 +12,7 @@ import torch
 from torch.utils.data import DataLoader
 from torchvision.utils import make_grid, save_image
 
-from core.dataset import Dataset
+from core.dataset import Dataset, get_ref_index
 from joblib import Parallel, delayed
 
 class Tester():
@@ -40,6 +40,7 @@ class Tester():
     def test(self):
         win_len = self.config["data_loader"]["sample_length"]
         stride = self.config["data_loader"]["stride"]
+        noverlap = self.config["data_loader"]["noverlap"]
         comp_windows = {v_name:[] for v_name in self.dataset.video_names}
         video_len = {}
 
@@ -100,7 +101,16 @@ class Tester():
             print("Loop iterating through all windows...")
             for i in tqdm(range(len(windows)), desc=video_name):
                 # Loop iterating through all frames in each window
-                for j in range(windows[i].shape[1]):
+                frame_index = i*(win_len-noverlap)
+                frame_index += (stride-1)*frame_index
+                window_frame_indices = get_ref_index(video_len[video_name], win_len, stride, pivot=frame_index)
+
+                # print("Window %i, frames %s"%(i, str(window_frame_indices)))
+
+                for j, fr_idx in enumerate(window_frame_indices):
+                    comp_frames[video_name][fr_idx].append(windows[i][0,j,...])
+
+                # for j in range(windows[i].shape[1]):
                     # print(i, j, i+j*stride)
 
                     # grid = make_grid(torch.tensor(windows[i][0,...]), nrow=1, normalize=True)
@@ -108,7 +118,7 @@ class Tester():
                     # import sys
                     # sys.exit()
 
-                    comp_frames[video_name][i+j*stride].append(windows[i][0,j,...])
+                    # comp_frames[video_name][i+j*stride].append(windows[i][0,j,...])
 
                     # print("WINDOW SHAPE: ", windows[i].shape)
                     # print("FRAME SHAPE: ", windows[i][0,j,...].shape)

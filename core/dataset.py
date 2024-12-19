@@ -101,7 +101,7 @@ class Dataset(torch.utils.data.Dataset):
         frame_tensors = self._to_tensors(frames)*2.0 - 1.0
         mask_tensors = self._to_tensors(masks)
 
-        print(f"Loading {self.split}: {ref_index}")
+        # print(f"Loading {self.split}: {ref_index}")
 
         return frame_tensors, mask_tensors
 
