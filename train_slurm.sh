@@ -12,7 +12,7 @@
 #SBATCH --time=1000:00:00
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=miguel.sanchez.dominguez@upm.es
-#SBATCH --output=slurm_STTN_sch2.out
+#SBATCH --output=slurm_STTN_sch1.out
 ##------------------------ End job description ------------------------
 
 date
@@ -22,10 +22,23 @@ conda activate AIRML
 ##python train.py --config configs/twin_jet_old_scaled_dev.json --model sttn
 ##python test_custom.py --config configs/twin_jet_old_scaled_dev.json --model sttn --ckpt 4500 --ds_name full_ds_1e4
 
+python train.py --config configs/scheduled_runs/win_str_study_no99/w5_s1.json --model sttn
+python train.py --config configs/scheduled_runs/win_str_study_no0/w5_s1.json --model sttn
+python train.py --config configs/scheduled_runs/win_str_study_no05/w5_s1.json --model sttn
+python train.py --config configs/scheduled_runs/win_str_study_no0/w11_s1.json --model sttn
+python train.py --config configs/scheduled_runs/win_str_study_no05/w11_s1.json --model sttn
+python train.py --config configs/scheduled_runs/win_str_study_no99/w11_s1.json --model sttn
+python train.py --config configs/scheduled_runs/win_str_study_no0/w21_s1.json --model sttn
+python train.py --config configs/scheduled_runs/win_str_study_no05/w21_s1.json --model sttn
+python train.py --config configs/scheduled_runs/win_str_study_no99/w21_s1.json --model sttn
+
+# python test_custom.py --config configs/scheduled_runs/win_str_study_no99/w5_s1.json --model sttn --ckpt 50000 --ds_name full_ds_1e4
+# python test_custom.py --config configs/scheduled_runs/win_str_study_no0/w5_s1.json --model sttn --ckpt 50000 --ds_name full_ds_1e4
+
 # python train.py --config configs/scheduled_runs/w5_s2.json --model sttn
 # python train.py --config configs/scheduled_runs/w5_s3.json --model sttn
 # python train.py --config configs/scheduled_runs/w5_s5.json --model sttn
-python train.py --config configs/scheduled_runs/w5_s6.json --model sttn
+# python train.py --config configs/scheduled_runs/w5_s6.json --model sttn
 # python train.py --config configs/scheduled_runs/w5_s7.json --model sttn
 # python train.py --config configs/scheduled_runs/w5_s8.json --model sttn
 # python train.py --config configs/scheduled_runs/w5_s10.json --model sttn
